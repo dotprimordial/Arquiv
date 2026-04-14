@@ -11,7 +11,16 @@ const nextConfig = {
   // FIX: Configure Server Actions to allow multiple origins
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000', '127.0.0.1:3000', '127.0.0.1:54427', 'localhost'],
+      allowedOrigins: [
+        'localhost:3000',
+        '127.0.0.1:3000',
+        '127.0.0.1:54427',
+        'localhost',
+        '127.0.0.1',
+        '*.localhost',
+        'localhost:*',
+        '127.0.0.1:*',
+      ],
     },
   },
   // Allow access to remote image placeholder.
