@@ -8,8 +8,6 @@ import Markdown from 'react-markdown';
 // FIX: importar getFullNormContent que agora lê o Supabase primeiro
 import { getFullNormContent } from '@/lib/gemini';
 
-export const runtime = 'edge';
-
 export default function NormDetailPage() {
   const params = useParams();
   const router = useRouter();

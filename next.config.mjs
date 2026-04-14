@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   distDir: '.next',
   eslint: {
-    ignoreBuilds: true,
+    ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,

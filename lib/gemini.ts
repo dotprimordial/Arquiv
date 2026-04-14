@@ -38,16 +38,11 @@ export const getArchitecturalNorms = async (
 ): Promise<Norm[]> => {
   console.log(`[getArchitecturalNorms] Iniciando busca: ${country}, categoria: ${category}, query: "${queryText}"`);
 
-  const startTime = Date.now();
-
   try {
     const isSearchMode = queryText && queryText.trim() !== "";
 
-    // FIX #2: Nunca carregar content/structured_content na listagem simples
-    // Na busca, carregar apenas description + keywords (não content completo)
-    const selectFields = isSearchMode
-      ? "id, code, title, description, category, country, keywords, total_sections"
-      : "id, code, title, description, category, country, keywords, total_sections";
+    // Carregar apenas campos leves — sem content completo na listagem/busca
+    const selectFields = "id, code, title, description, category, country, keywords, total_sections";
 
     console.log(`[getArchitecturalNorms] Modo: ${isSearchMode ? "PESQUISA" : "LISTA SIMPLES"}`);
     console.log(`[getArchitecturalNorms] DEBUG - Country: "${country}" | Category: "${category}" | Query: "${queryText || 'none'}"`);

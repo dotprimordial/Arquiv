@@ -7,8 +7,6 @@ import { ArrowLeft, BookOpen, Loader2, AlertCircle, Share2, X } from 'lucide-rea
 import Markdown from 'react-markdown';
 import { getFullNormContentById } from '@/lib/gemini';
 
-export const runtime = 'edge';
-
 export default function NormDetailPage() {
   const params = useParams();
   const router = useRouter();

@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
-import Image from 'next/image';
-import { Compass, LogIn, LogOut, Upload as UploadIcon, User, ShieldCheck } from 'lucide-react';
-import CountrySelector, { countries as allCountries, Country } from '@/components/CountrySelector';
+import { LogIn, LogOut, Upload as UploadIcon, User, ShieldCheck } from 'lucide-react';
+import CountrySelector, { Country } from '@/components/CountrySelector';
 import NormSearch from '@/components/NormSearch';
 import NormDisplay from '@/components/NormDisplay';
 import { getArchitecturalNorms, Norm, updateNorm, getActiveCountries } from '@/lib/gemini';
@@ -20,7 +19,7 @@ const AuthModal = lazy(() => import('@/components/AuthModal'));
 const CATEGORIES = [
   "Todas", "Urbanismo", "Estruturas", "Segurança contra Incêndio",
   "Acessibilidade", "Instalações Elétricas", "Instalações Hidráulicas",
-  "Térmica e Acústica", "Materiais", "Sustentabilidade", "Presentation/Desenho"
+  "Térmica e Acústica", "Materiais", "Sustentabilidade", "Apresentação/Desenho"
 ] as const;
 
 interface SupabaseUser {

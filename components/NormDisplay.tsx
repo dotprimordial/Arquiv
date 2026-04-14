@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ChevronDown, Loader2, AlertCircle, BookOpen, ArrowRight, Compass, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
 
@@ -16,20 +16,18 @@ interface NormDisplayProps {
   countryCode: string;
   onDelete?: (id: string) => void;
   onUpdate?: (id: string, updates: Partial<Norm>) => void;
-  currentUserId?: string;
   hasSearchQuery?: boolean; // Nova prop para indicar se houve pesquisa
   isAdmin?: boolean; // Admin pode editar/deletar qualquer norma
 }
 
-export default function NormDisplay({ 
-  norms, 
-  isLoading, 
-  error, 
-  countryName, 
+export default function NormDisplay({
+  norms,
+  isLoading,
+  error,
+  countryName,
   countryCode,
   onDelete,
   onUpdate,
-  currentUserId,
   hasSearchQuery = false, // Default: sem pesquisa
   isAdmin = false // Default: não é admin
 }: NormDisplayProps) {
@@ -133,7 +131,7 @@ export default function NormDisplay({
                     <div className="flex-1">
                       <p className="text-xs font-bold text-blue-900 mb-1">Trecho Relevante:</p>
                       <p className="text-sm text-blue-800 leading-relaxed italic">
-                        "{expandedNorms.has(norm.id) ? norm.excerpt : norm.excerpt.substring(0, 200) + (norm.excerpt.length > 200 ? '...' : '')}"
+                        &quot;{expandedNorms.has(norm.id) ? norm.excerpt : norm.excerpt.substring(0, 200) + (norm.excerpt.length > 200 ? '...' : '')}&quot;
                       </p>
                       {norm.excerpt.length > 200 && (
                         <button
@@ -163,7 +161,7 @@ export default function NormDisplay({
               
               <div className="pt-4 flex items-center justify-between">
                 <Link 
-                  href={`/norm/${encodeURIComponent(countryName)}/${encodeURIComponent(norm.id)}`}
+                  href={`/norm_detail/${encodeURIComponent(norm.id)}`}
                   className="inline-flex items-center gap-2 text-sm font-bold text-zinc-900 hover:gap-3 transition-all"
                 >
                   Ler mais <ArrowRight className="w-4 h-4" />

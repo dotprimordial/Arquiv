@@ -50,7 +50,6 @@ export default function UploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [structuredContent, setStructuredContent] = useState<string>('');
   const [autoCategories, setAutoCategories] = useState<string[]>([]);
   const [autoKeywords, setAutoKeywords] = useState<string[]>([]);
 
@@ -63,7 +62,6 @@ export default function UploadPage() {
     
     try {
       const result = await extractDocumentStructure(content, title);
-      setStructuredContent(result.structuredContent);
       setAutoCategories(result.categories);
       setAutoKeywords(result.keywords);
       
@@ -154,7 +152,7 @@ export default function UploadPage() {
         try {
           console.log(`Tentando upload no bucket: ${bucketName}`);
           
-          const { data, error: uploadError } = await supabase.storage
+          const { error: uploadError } = await supabase.storage
             .from(bucketName)
             .upload(filePath, file);
 
@@ -219,7 +217,6 @@ export default function UploadPage() {
 
       // Usar categorias e palavras-chave automáticas se disponíveis
       const finalCategory = autoCategories.length > 0 ? autoCategories[0] : category;
-      const finalKeywords = autoKeywords.length > 0 ? autoKeywords : [];
 
       const result = await processAndUploadNorm({
         code: normDecree,
@@ -398,13 +395,13 @@ export default function UploadPage() {
                         onClick={() => analyzeDocument(normContent.replace(/<(.|\n)*?>/g, ''), normName)}
                         className="text-xs bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition-colors"
                       >
-                        🧠 Analizar Documento
+                        🧠 Analisar Documento
                       </button>
                     )}
                     {isAnalyzing && (
                       <div className="text-xs text-blue-600 font-medium flex items-center gap-1">
                         <Loader2 className="w-3 h-3 animate-spin" />
-                        Analizando...
+                        Analisando...
                       </div>
                     )}
                   </div>

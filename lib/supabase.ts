@@ -17,6 +17,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     storage: isBrowser ? localStorage : undefined,
-    storageKey: 'arquiv-auth-token',
+    storageKey: 'sb-arquiv-auth-token',
+    flowType: 'pkce',
+    debug: process.env.NODE_ENV === 'development',
   },
 });
