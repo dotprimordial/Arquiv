@@ -408,10 +408,10 @@ export const getActiveCountries = async (): Promise<string[]> => {
 
     // Extract unique country names from joined data
     const countries = new Set<string>();
-    type CountryItem = { countries?: { name?: string } };
-    (data || []).forEach((item: CountryItem) => {
-      if (item.countries?.name) {
-        countries.add(item.countries.name);
+    (data || []).forEach((item) => {
+      const countryData = item as { countries?: { name?: string }[] };
+      if (countryData.countries && countryData.countries[0]?.name) {
+        countries.add(countryData.countries[0].name);
       }
     });
 
