@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, LogIn, Globe } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { getAuthRedirectUrl } from '@/lib/auth-utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function SignIn({ onToggle, onClose }: { onToggle: () => void; onClose?: () => void }) {
@@ -34,7 +35,7 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: getAuthRedirectUrl(),
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',

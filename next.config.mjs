@@ -2,12 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   distDir: '.next',
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   // FIX: Configure Server Actions to allow multiple origins
   experimental: {
     serverActions: {

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { FileText, AlertCircle, Loader2, ArrowLeft, Upload, File } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { extractDocumentStructure } from '@/lib/gemini';
 import { processAndUploadNorm } from '@/app/actions/norm-actions';
@@ -230,7 +231,9 @@ export default function UploadPage() {
       });
 
       console.log('Norma processada com sucesso:', result);
-      alert(`Norma processada!\nSeções: ${result.sectionsCreated}\nEmbeddings: ${result.embeddingsGenerated}`);
+      toast.success('Norma processada com sucesso!', {
+        description: `Seções: ${result.sectionsCreated} | Embeddings: ${result.embeddingsGenerated}`,
+      });
 
       router.push('/');
     } catch (err: unknown) {
