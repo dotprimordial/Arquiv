@@ -1,7 +1,8 @@
-# Arquiv - Plataforma de Normas de Contrução
-
 <div align="center">
-  <h3>🏗️ Plataforma completa para consulta automatica de normas arquitetônicas por país</h3>
+# Arquiv - Plataforma de Normas de Contrução
+</div>
+<div align="center">
+  <h3>Plataforma completa para consulta automatica de normas arquitetônicas por país</h3>
   <p>Busca inteligente, pesquise pela situação e receba a norma ideal para tal</p>
 </div>
 
