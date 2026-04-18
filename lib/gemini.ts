@@ -16,6 +16,8 @@ export interface Norm {
   reasoning?: string;
   excerpt?: string;
   file_url?: string;
+  category?: string;
+  country?: string;
   [key: string]: unknown;
 }
 
