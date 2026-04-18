@@ -52,7 +52,6 @@ export default function UploadPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [autoCategories, setAutoCategories] = useState<string[]>([]);
-  const [autoKeywords, setAutoKeywords] = useState<string[]>([]);
 
   const router = useRouter();
 
@@ -64,7 +63,6 @@ export default function UploadPage() {
     try {
       const result = await extractDocumentStructure(content, title);
       setAutoCategories(result.categories);
-      setAutoKeywords(result.keywords);
       
       // Se a categoria atual não estiver nas categorias sugeridas, usar a primeira sugerida
       if (result.categories.length > 0 && !result.categories.includes(category)) {

@@ -372,7 +372,7 @@ export async function searchNormsSemantic(
         .eq('name', country)
         .single();
 
-      if (countryData && (countryData as any).id) {
+      if (countryData && (countryData as { id?: string }).id) {
         const { data: fallbackData } = await supabase
           .from('norm_sections')
           .select(`
@@ -384,7 +384,7 @@ export async function searchNormsSemantic(
             content,
             norms!inner(code, title, country_id, countries(name))
           `)
-          .eq('norms.country_id', (countryData as any).id)
+          .eq('norms.country_id', (countryData as { id?: string }).id)
           .ilike('content', `%${query}%`)
           .limit(limit);
 

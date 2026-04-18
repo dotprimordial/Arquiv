@@ -67,7 +67,7 @@ export const getArchitecturalNorms = async (
       let query = supabase
         .from("norms")
         .select(selectFields)
-        .eq("country_id", (countryData as any).id);
+        .eq("country_id", (countryData as { id?: string }).id);
 
       if (category !== "Todas") {
         const { data: catData, error: catError } = await supabase
@@ -77,7 +77,7 @@ export const getArchitecturalNorms = async (
           .single();
 
         if (!catError && catData) {
-          query = query.eq("category_id", (catData as any).id);
+          query = query.eq("category_id", (catData as { id?: string }).id);
         }
       }
 
@@ -318,7 +318,7 @@ export const getFullNormContent = async (country: string, code: string): Promise
     const { data, error } = await supabase
       .from("norms")
       .select("content, title")
-      .eq("country_id", (countryData as any).id)
+      .eq("country_id", (countryData as { id?: string }).id)
       .eq("code", code)
       .maybeSingle();
 
@@ -350,13 +350,14 @@ export const getFullNormContentById = async (normId: string): Promise<string> =>
       .eq("id", normId)
       .maybeSingle();
 
-    if (!error && data) {
-      if ((data as any).file_url) {
-        console.log(`[getFullNormContentById] PDF encontrado: ${(data as any).file_url}`);
-        return `PDF:${(data as any).file_url}`;
-      } else if ((data as any).content || (data as any).structured_content) {
+    const normData = data as { file_url?: string; content?: string; structured_content?: string } | null;
+    if (!error && normData) {
+      if (normData.file_url) {
+        console.log(`[getFullNormContentById] PDF encontrado: ${normData.file_url}`);
+        return `PDF:${normData.file_url}`;
+      } else if (normData.content || normData.structured_content) {
         console.log(`[getFullNormContentById] Conteúdo encontrado no Supabase`);
-        return (data as any).content || (data as any).structured_content;
+        return normData.content || normData.structured_content || '';
       }
     } else if (error) {
       console.error("❌ Erro do Supabase:", JSON.stringify(error, null, 2));
@@ -405,7 +406,8 @@ export const getActiveCountries = async (): Promise<string[]> => {
 
     // Extract unique country names from joined data
     const countries = new Set<string>();
-    (data || []).forEach((item: any) => {
+    type CountryItem = { countries?: { name?: string } };
+    (data || []).forEach((item: CountryItem) => {
       if (item.countries?.name) {
         countries.add(item.countries.name);
       }
