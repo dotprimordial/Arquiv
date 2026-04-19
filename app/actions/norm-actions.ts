@@ -168,6 +168,8 @@ export async function searchNormsSemantic(
     return [];
   }
 
+  let norms: Array<Record<string, unknown>> = [];
+  
   try {
     const { supabase } = await import('@/lib/supabase');
     console.log('[searchNormsSemantic] Buscando todas as normas para análise...');
@@ -205,7 +207,7 @@ export async function searchNormsSemantic(
       throw new Error(`Erro ao buscar normas: ${normsError.message}`);
     }
 
-    const norms = (normsData || []) as Array<Record<string, unknown>>;
+    norms = (normsData || []) as Array<Record<string, unknown>>;
     console.log('[searchNormsSemantic] Normas encontradas:', norms.length);
 
     if (norms.length === 0) {
@@ -320,7 +322,10 @@ INSTRUÇÕES:
   } catch (err: unknown) {
     const error = err as Error;
     console.error('[searchNormsSemantic] Erro completo:', error);
-    throw new Error(error.message || 'Erro interno na busca semântica');
+    
+    // Fallback to textual search on any error
+    console.warn('[searchNormsSemantic] Erro na IA, usando fallback textual...');
+    return fallbackTextualSearch(norms, query, limit);
   }
 }
 

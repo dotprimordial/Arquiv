@@ -36,7 +36,7 @@ export default function Home() {
   const [selectedCountry, setSelectedCountry] = useState<Country>({ code: 'PT', name: 'Portugal' });
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isAiSearchEnabled, setIsAiSearchEnabled] = useState(false); // Toggle busca IA
+  const [isAiSearchEnabled, setIsAiSearchEnabled] = useState(true); // Toggle busca IA
   const [norms, setNorms] = useState<Norm[] | null>(null);
   const [semanticResults, setSemanticResults] = useState<SearchResult[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
