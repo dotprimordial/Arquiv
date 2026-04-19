@@ -159,6 +159,20 @@ export interface GroupedSearchResult {
   sections: SearchResult[];
 }
 
+// Function to clean HTML formatting from text
+function cleanHtmlFormatting(text: string): string {
+  return text
+    .replace(/<[^>]*>/g, '') // Remove HTML tags
+    .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+    .replace(/&amp;/g, '&') // Replace &amp; with &
+    .replace(/&lt;/g, '<') // Replace &lt; with <
+    .replace(/&gt;/g, '>') // Replace &gt; with >
+    .replace(/&quot;/g, '"') // Replace &quot; with "
+    .replace(/&#39;/g, "'") // Replace &#39; with '
+    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .trim();
+}
+
 export async function searchNormsSemantic(
   query: string,
   country?: string,
@@ -217,15 +231,18 @@ export async function searchNormsSemantic(
       return [];
     }
 
-    // Prepare data for AI analysis
+    // Prepare data for AI analysis (clean HTML formatting)
     const normsForAI = norms.map((norm) => ({
       id: norm.id,
-      code: norm.code,
-      title: norm.title,
-      description: String(norm.description || "").substring(0, 500),
-      content: String(norm.content || "").substring(0, 1000),
+      code: cleanHtmlFormatting(String(norm.code || "")),
+      title: cleanHtmlFormatting(String(norm.title || "")),
+      description: cleanHtmlFormatting(String(norm.description || "")).substring(0, 500),
+      content: cleanHtmlFormatting(String(norm.content || "")).substring(0, 1000),
       keywords: (norm.keywords as string[]) || [],
     }));
+
+    // Clean query as well
+    const cleanedQuery = cleanHtmlFormatting(query);
 
     // Call AI to analyze relevance
     const messages: Array<{ role: string; content: string }> = [
@@ -233,7 +250,7 @@ export async function searchNormsSemantic(
         role: "user",
         content: `Você é um especialista em normas arquitetônicas.
 
-Consulta: "${query}" | País: ${country || 'Todos'}
+Consulta: "${cleanedQuery}" | País: ${country || 'Todos'}
 
 Normas disponíveis (${normsForAI.length}):
 ${JSON.stringify(normsForAI, null, 2)}
@@ -348,14 +365,14 @@ INSTRUÇÕES:
 
 // Fallback textual search function
 function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: string, limit: number): SearchResult[] {
-  const queryLower = query.toLowerCase();
+  const queryLower = cleanHtmlFormatting(query).toLowerCase();
   
   const scored = norms.map((norm) => {
     let score = 0;
-    const code = String(norm.code || '').toLowerCase();
-    const title = String(norm.title || '').toLowerCase();
-    const description = String(norm.description || '').toLowerCase();
-    const content = String(norm.content || '').toLowerCase();
+    const code = cleanHtmlFormatting(String(norm.code || '')).toLowerCase();
+    const title = cleanHtmlFormatting(String(norm.title || '')).toLowerCase();
+    const description = cleanHtmlFormatting(String(norm.description || '')).toLowerCase();
+    const content = cleanHtmlFormatting(String(norm.content || '')).toLowerCase();
     const keywords = ((norm.keywords as string[]) || []).map(k => k.toLowerCase());
     
     if (code.includes(queryLower)) score += 10;
@@ -379,7 +396,7 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
       sectionType: 'norma',
       sectionNumber: null,
       sectionTitle: null,
-      content: ((item.norm.content as string) || '') + ' ' + ((item.norm.description as string) || ''),
+      content: cleanHtmlFormatting(((item.norm.content as string) || '') + ' ' + ((item.norm.description as string) || '')),
       similarity: item.score / 10,
       decree: undefined,
       regulationNumber: undefined,
