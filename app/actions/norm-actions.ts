@@ -1,45 +1,8 @@
 'use server';
 
 import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from '@/lib/supabase-server';
-import { analyzeDocumentStructure, generateSectionEmbeddings, chunkDocument } from '@/lib/semantic-search';
 
 const apiKey = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || '';
-
-// Simple hash function for browser compatibility (replaces crypto.createHash)
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return Math.abs(hash).toString(16);
-}
-
-// Retry utility with exponential backoff
-async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  initialDelayMs: number = 1000
-): Promise<T> {
-  let lastError: Error | null = null;
-  
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error as Error;
-      console.warn(`[Retry] Attempt ${attempt + 1}/${maxRetries} failed:`, lastError.message);
-      
-      if (attempt < maxRetries - 1) {
-        const delayMs = initialDelayMs * Math.pow(2, attempt);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
-    }
-  }
-  
-  throw lastError || new Error('Max retries exceeded');
-}
 
 export interface UploadResult {
   normId: string;
@@ -145,87 +108,13 @@ export async function processAndUploadNorm(
     const normId = normData.id;
     console.log(`[processAndUploadNorm] ✓ Norma criada: ${normId}`);
 
-    // Step 4: Analyze document and create sections
-    let documentText = '';
+    console.log(`[processAndUploadNorm] === SUCESSO ===`);
 
-    if (formData.fileType === 'text' && formData.content) {
-      documentText = formData.content;
-    } else if (formData.fileType === 'pdf' && formData.fileUrl) {
-      documentText = `${formData.title}\n${formData.code}\nPDF document`;
-    }
-
-    if (!documentText || documentText.length < 50) {
-      console.warn('[processAndUploadNorm] Documento muito pequeno, pulando análise');
-      return { normId, sectionsCreated: 0, embeddingsGenerated: 0 };
-    }
-
-    console.log('[processAndUploadNorm] Analisando documento...');
-    const sections = await retryWithBackoff(
-      () => analyzeDocumentStructure(documentText, apiKey),
-      3,
-      2000
-    );
-    console.log(`[processAndUploadNorm] ✓ ${sections.length} seções analisadas`);
-
-    const chunkedSections = chunkDocument(sections, 2000);
-    console.log(`[processAndUploadNorm] ✓ ${chunkedSections.length} seções após chunking`);
-
-    const sectionsWithEmbeddings = await retryWithBackoff(
-      () => generateSectionEmbeddings(chunkedSections, apiKey),
-      3,
-      2000
-    );
-    console.log(`[processAndUploadNorm] ✓ ${sectionsWithEmbeddings.length} embeddings gerados`);
-
-    let sectionsInserted = 0;
-
-    try {
-      for (const section of sectionsWithEmbeddings) {
-        const { error: sectionError } = await supabaseWrite
-          .from('norm_sections')
-          .insert({
-            norm_id: normId,
-            section_type: section.sectionType,
-            section_number: section.sectionNumber,
-            section_title: section.sectionTitle,
-            content: section.content,
-            content_raw: section.content,
-            embedding: section.embedding,
-            order_index: section.orderIndex,
-          });
-
-        if (!sectionError) {
-          sectionsInserted++;
-        } else {
-          console.error('[processAndUploadNorm] Erro ao inserir seção:', sectionError);
-          throw new Error(`Falha ao inserir seção: ${sectionError.message}`);
-        }
-      }
-
-      // Update total sections count
-      await supabaseWrite
-        .from('norms')
-        .update({ total_sections: sectionsInserted })
-        .eq('id', normId);
-
-      console.log(`[processAndUploadNorm] === SUCESSO === ${sectionsInserted} seções inseridas`);
-
-      return {
-        normId,
-        sectionsCreated: sectionsInserted,
-        embeddingsGenerated: sectionsWithEmbeddings.length,
-      };
-    } catch (sectionInsertError) {
-      // Rollback: delete the norm if sections insertion failed
-      console.error('[processAndUploadNorm] Erro na inserção de seções, fazendo rollback...', sectionInsertError);
-      try {
-        await supabaseWrite.from('norms').delete().eq('id', normId);
-        console.log('[processAndUploadNorm] ✓ Norma deletada (rollback)');
-      } catch (rollbackError) {
-        console.error('[processAndUploadNorm] Erro ao fazer rollback:', rollbackError);
-      }
-      throw sectionInsertError;
-    }
+    return {
+      normId,
+      sectionsCreated: 0,
+      embeddingsGenerated: 0,
+    };
   } catch (error: unknown) {
     console.error('[processAndUploadNorm] === ERRO ===');
     if (error instanceof Error) {
@@ -281,19 +170,18 @@ export async function searchNormsSemantic(
 
   try {
     const { supabase } = await import('@/lib/supabase');
-    console.log('[searchNormsSemantic] Fazendo busca textual direta (RPC desativado devido a problemas de tipo)...');
+    console.log('[searchNormsSemantic] Fazendo busca textual direta na tabela norms...');
     
-    // Direct query without RPC to avoid type inference issues
+    // Direct query on norms table
     const queryBuilder = supabase
-      .from('norm_sections')
+      .from('norms')
       .select(`
         id,
-        norm_id,
-        norms!inner(code, title, country),
-        section_type,
-        section_number,
-        section_title,
-        content
+        code,
+        title,
+        description,
+        country,
+        keywords
       `);
 
     // Apply country filter if provided
@@ -305,13 +193,13 @@ export async function searchNormsSemantic(
         .single();
       
       if (countryData) {
-        queryBuilder.eq('norms.country_id', (countryData as { id?: string }).id);
+        queryBuilder.eq('country_id', (countryData as { id?: string }).id);
       }
     }
 
-    // Apply content filter (textual search instead of vector similarity)
+    // Apply content filter (textual search)
     const { data, error } = await queryBuilder
-      .ilike('content', `%${query}%`)
+      .or(`code.ilike.%${query}%,title.ilike.%${query}%,description.ilike.%${query}%`)
       .limit(limit);
 
     if (error) {
@@ -322,21 +210,18 @@ export async function searchNormsSemantic(
     const results = (data || []) as Array<Record<string, unknown>>;
     console.log('[searchNormsSemantic] Resultados encontrados:', results.length);
 
-    return results.map((item) => {
-      const norms = item.norms as Record<string, unknown>;
-      return {
-        sectionId: String(item.id),
-        normId: String(item.norm_id),
-        normCode: (norms?.code as string) || '',
-        normTitle: (norms?.title as string) || '',
-        normCountry: (norms?.country as string) || '',
-        sectionType: (item.section_type as string) || '',
-        sectionNumber: item.section_number as string | null,
-        sectionTitle: item.section_title as string | null,
-        content: (item.content as string) || '',
-        similarity: 0.3,
-      };
-    });
+    return results.map((item) => ({
+      sectionId: String(item.id),
+      normId: String(item.id),
+      normCode: (item.code as string) || '',
+      normTitle: (item.title as string) || '',
+      normCountry: (item.country as string) || '',
+      sectionType: 'norma',
+      sectionNumber: null,
+      sectionTitle: null,
+      content: ((item.description as string) || '') + ' ' + ((item.keywords as string[]) || []).join(' '),
+      similarity: 0.3,
+    }));
   } catch (err: unknown) {
     const error = err as Error;
     console.error('[searchNormsSemantic] Erro completo:', error);
@@ -349,18 +234,6 @@ export async function deleteNormServer(id: string): Promise<void> {
   if (!id) throw new Error('ID da norma é obrigatório');
 
   const supabase = getAdminSupabaseClient();
-  // FIX #12: Deletar seções primeiro (em cascata) para evitar foreign key errors
-  const { error: sectionsError } = await supabase
-    .from('norm_sections')
-    .delete()
-    .eq('norm_id', id);
-
-  if (sectionsError) {
-    console.error('[deleteNormServer] Erro ao deletar seções:', sectionsError);
-    // Não lançar erro aqui — a cascade constraint deve cuidar disso
-    // mas logamos para diagnóstico
-  }
-
   const { error } = await supabase
     .from('norms')
     .delete()
