@@ -260,6 +260,13 @@ INSTRUÇÕES:
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error('[searchNormsSemantic] Erro na API IA:', aiResponse.status, errorText);
+      
+      // Fallback to textual search on rate limit or error
+      if (aiResponse.status === 429) {
+        console.warn('[searchNormsSemantic] Rate limit, usando fallback textual...');
+        return fallbackTextualSearch(norms, query, limit);
+      }
+      
       throw new Error(`Erro na API IA: ${aiResponse.status}`);
     }
 
@@ -279,6 +286,12 @@ INSTRUÇÕES:
     }
 
     console.log('[searchNormsSemantic] Resultados IA:', aiResults.length);
+
+    // If AI returns no results, fallback to textual search
+    if (aiResults.length === 0) {
+      console.warn('[searchNormsSemantic] IA não retornou resultados, usando fallback textual...');
+      return fallbackTextualSearch(norms, query, limit);
+    }
 
     // Map AI results to SearchResult format
     const results = aiResults
@@ -309,6 +322,44 @@ INSTRUÇÕES:
     console.error('[searchNormsSemantic] Erro completo:', error);
     throw new Error(error.message || 'Erro interno na busca semântica');
   }
+}
+
+// Fallback textual search function
+function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: string, limit: number): SearchResult[] {
+  const queryLower = query.toLowerCase();
+  
+  const scored = norms.map((norm) => {
+    let score = 0;
+    const code = String(norm.code || '').toLowerCase();
+    const title = String(norm.title || '').toLowerCase();
+    const description = String(norm.description || '').toLowerCase();
+    const content = String(norm.content || '').toLowerCase();
+    const keywords = ((norm.keywords as string[]) || []).map(k => k.toLowerCase());
+    
+    if (code.includes(queryLower)) score += 10;
+    if (title.includes(queryLower)) score += 8;
+    if (description.includes(queryLower)) score += 4;
+    if (content.includes(queryLower)) score += 3;
+    if (keywords.some(k => k.includes(queryLower))) score += 5;
+    
+    return { norm, score };
+  }).filter(item => item.score > 0);
+  
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(item => ({
+      sectionId: String(item.norm.id),
+      normId: String(item.norm.id),
+      normCode: (item.norm.code as string) || '',
+      normTitle: (item.norm.title as string) || '',
+      normCountry: (item.norm.country as string) || '',
+      sectionType: 'norma',
+      sectionNumber: null,
+      sectionTitle: null,
+      content: ((item.norm.content as string) || '') + ' ' + ((item.norm.description as string) || ''),
+      similarity: item.score / 10,
+    }));
 }
 
 // FIX #7: deleteNormServer — Server Action para contornar RLS do cliente
