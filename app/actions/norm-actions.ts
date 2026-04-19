@@ -161,7 +161,7 @@ export async function searchNormsSemantic(
   country?: string,
   limit: number = 10
 ): Promise<SearchResult[]> {
-  console.log('[searchNormsSemantic] Iniciando busca:', { query, country, limit });
+  console.log('[searchNormsSemantic] Iniciando busca com IA:', { query, country, limit });
 
   if (!apiKey || apiKey === '' || apiKey === 'MY_OPENROUTER_API_KEY') {
     console.warn('[searchNormsSemantic] API Key não configurada - busca semântica desativada');
@@ -170,9 +170,9 @@ export async function searchNormsSemantic(
 
   try {
     const { supabase } = await import('@/lib/supabase');
-    console.log('[searchNormsSemantic] Fazendo busca textual direta na tabela norms...');
+    console.log('[searchNormsSemantic] Buscando todas as normas para análise...');
     
-    // Direct query on norms table
+    // Fetch all norms
     const queryBuilder = supabase
       .from('norms')
       .select(`
@@ -180,6 +180,7 @@ export async function searchNormsSemantic(
         code,
         title,
         description,
+        content,
         country,
         keywords
       `);
@@ -197,31 +198,112 @@ export async function searchNormsSemantic(
       }
     }
 
-    // Apply content filter (textual search)
-    const { data, error } = await queryBuilder
-      .or(`code.ilike.%${query}%,title.ilike.%${query}%,description.ilike.%${query}%`)
-      .limit(limit);
+    const { data: normsData, error: normsError } = await queryBuilder;
 
-    if (error) {
-      console.error('[searchNormsSemantic] Erro na busca:', error);
-      throw new Error(`Erro na busca: ${error.message}`);
+    if (normsError) {
+      console.error('[searchNormsSemantic] Erro ao buscar normas:', normsError);
+      throw new Error(`Erro ao buscar normas: ${normsError.message}`);
     }
 
-    const results = (data || []) as Array<Record<string, unknown>>;
-    console.log('[searchNormsSemantic] Resultados encontrados:', results.length);
+    const norms = (normsData || []) as Array<Record<string, unknown>>;
+    console.log('[searchNormsSemantic] Normas encontradas:', norms.length);
 
-    return results.map((item) => ({
-      sectionId: String(item.id),
-      normId: String(item.id),
-      normCode: (item.code as string) || '',
-      normTitle: (item.title as string) || '',
-      normCountry: (item.country as string) || '',
-      sectionType: 'norma',
-      sectionNumber: null,
-      sectionTitle: null,
-      content: ((item.description as string) || '') + ' ' + ((item.keywords as string[]) || []).join(' '),
-      similarity: 0.3,
+    if (norms.length === 0) {
+      return [];
+    }
+
+    // Prepare data for AI analysis
+    const normsForAI = norms.map((norm) => ({
+      id: norm.id,
+      code: norm.code,
+      title: norm.title,
+      description: String(norm.description || "").substring(0, 500),
+      content: String(norm.content || "").substring(0, 1000),
+      keywords: (norm.keywords as string[]) || [],
     }));
+
+    // Call AI to analyze relevance
+    const messages: Array<{ role: string; content: string }> = [
+      {
+        role: "user",
+        content: `Você é um especialista em normas arquitetônicas.
+
+Consulta: "${query}" | País: ${country || 'Todos'}
+
+Normas disponíveis (${normsForAI.length}):
+${JSON.stringify(normsForAI, null, 2)}
+
+INSTRUÇÕES:
+1. Analise a consulta e determine quais normas são relevantes
+2. Use APENAS os dados fornecidos
+3. NUNCA invente informações
+4. Retorne APENAS JSON válido: [{"id": "uuid", "reasoning": "explicação", "relevanceScore": 0.95}]`,
+      },
+    ];
+
+    console.log('[searchNormsSemantic] Enviando para IA...');
+    const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://arquiv.org',
+      },
+      body: JSON.stringify({
+        model: 'google/gemma-4-31b-it:free',
+        messages,
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error('[searchNormsSemantic] Erro na API IA:', aiResponse.status, errorText);
+      throw new Error(`Erro na API IA: ${aiResponse.status}`);
+    }
+
+    const aiData = await aiResponse.json();
+    const rawText = aiData.choices?.[0]?.message?.content || "[]";
+    
+    // Extract JSON from response
+    const cleanedText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    let aiResults: Array<{ id: string; reasoning: string; relevanceScore: number }>;
+    try {
+      const parsed = JSON.parse(cleanedText);
+      aiResults = Array.isArray(parsed) ? parsed : parsed.results || [];
+    } catch {
+      console.error('[searchNormsSemantic] Erro ao parsear JSON IA:', cleanedText.substring(0, 200));
+      aiResults = [];
+    }
+
+    console.log('[searchNormsSemantic] Resultados IA:', aiResults.length);
+
+    // Map AI results to SearchResult format
+    const results = aiResults
+      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      .slice(0, limit)
+      .map((aiResult) => {
+        const norm = norms.find((n) => n.id === aiResult.id);
+        if (!norm) return null;
+        
+        return {
+          sectionId: String(norm.id),
+          normId: String(norm.id),
+          normCode: (norm.code as string) || '',
+          normTitle: (norm.title as string) || '',
+          normCountry: (norm.country as string) || '',
+          sectionType: 'norma',
+          sectionNumber: null,
+          sectionTitle: null,
+          content: ((norm.content as string) || '') + ' ' + ((norm.description as string) || ''),
+          similarity: aiResult.relevanceScore,
+        };
+      })
+      .filter((r) => r !== null);
+
+    return results as SearchResult[];
   } catch (err: unknown) {
     const error = err as Error;
     console.error('[searchNormsSemantic] Erro completo:', error);
