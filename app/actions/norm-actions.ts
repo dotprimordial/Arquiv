@@ -267,52 +267,6 @@ export interface GroupedSearchResult {
   sections: SearchResult[];
 }
 
-// FIX #9: Cache de embeddings em memória para evitar chamadas repetidas
-const embeddingCache = new Map<string, number[]>();
-
-async function getQueryEmbedding(query: string): Promise<number[]> {
-  const cacheKey = simpleHash(query.toLowerCase().trim());
-
-  if (embeddingCache.has(cacheKey)) {
-    console.log('[getQueryEmbedding] Cache hit para:', query.substring(0, 50));
-    return embeddingCache.get(cacheKey)!;
-  }
-
-  const embeddingResponse = await fetch('https://openrouter.ai/api/v1/embeddings', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://arquiv.org',
-    },
-    body: JSON.stringify({
-      model: 'openai/text-embedding-3-small',
-      input: query,
-    }),
-  });
-
-  if (!embeddingResponse.ok) {
-    const errorText = await embeddingResponse.text();
-    throw new Error(`Falha ao gerar embedding: ${embeddingResponse.status} - ${errorText.substring(0, 200)}`);
-  }
-
-  const embeddingData = await embeddingResponse.json();
-  const embedding = embeddingData.data?.[0]?.embedding;
-
-  if (!embedding) {
-    throw new Error('Embedding não retornado pela API');
-  }
-
-  // Limitar cache a 100 entradas para evitar uso excessivo de memória
-  if (embeddingCache.size >= 100) {
-    const firstKey = embeddingCache.keys().next().value;
-    if (firstKey) embeddingCache.delete(firstKey);
-  }
-
-  embeddingCache.set(cacheKey, embedding);
-  return embedding;
-}
-
 export async function searchNormsSemantic(
   query: string,
   country?: string,
@@ -326,101 +280,63 @@ export async function searchNormsSemantic(
   }
 
   try {
-    console.log('[searchNormsSemantic] Gerando/recuperando embedding...');
-    // FIX #9: Usar cache de embeddings
-    const queryEmbedding = await getQueryEmbedding(query);
-
     const { supabase } = await import('@/lib/supabase');
-    console.log('[searchNormsSemantic] Chamando RPC search_norm_sections...');
-    const { data, error } = await supabase
-      .rpc('search_norm_sections', {
-        query_embedding: queryEmbedding,
-        match_threshold: 0.4, // FIX #10: Reduzir threshold para mais resultados
-        match_count: limit,
-        p_country: country || null,
-      });
-
-    if (error) {
-      console.error('[searchNormsSemantic] Erro na busca RPC:', error);
-      throw new Error(`Erro na busca: ${error.message}`);
-    }
-
-    const results = data || [];
-    console.log('[searchNormsSemantic] Resultados encontrados:', results.length);
+    console.log('[searchNormsSemantic] Fazendo busca textual direta (RPC desativado devido a problemas de tipo)...');
     
-    // DEBUG: Verificar se o filtro de país está funcionando
-    if (results.length > 0) {
-      const countriesInResults = results.map((r: { norm_country?: string }) => r.norm_country);
-      console.log('[searchNormsSemantic] DEBUG - Países nos resultados:', countriesInResults);
-      console.log('[searchNormsSemantic] DEBUG - País esperado:', country);
-      
-      // Verificar se há resultados de países errados
-      const wrongCountries = countriesInResults.filter((c: string) => c !== country);
-      if (wrongCountries.length > 0) {
-        console.error('[searchNormsSemantic] ERRO - Resultados de países errados:', wrongCountries);
-      }
-    }
+    // Direct query without RPC to avoid type inference issues
+    const queryBuilder = supabase
+      .from('norm_sections')
+      .select(`
+        id,
+        norm_id,
+        norms!inner(code, title, country),
+        section_type,
+        section_number,
+        section_title,
+        content
+      `);
 
-    // FIX #28: Se semântica não retornar resultados, tentar busca textual com normalized schema
-    if (results.length === 0 && country) {
-      console.log('[searchNormsSemantic] Sem resultados semânticos, tentando fallback textual...');
-
-      // First get country ID
+    // Apply country filter if provided
+    if (country) {
       const { data: countryData } = await supabase
         .from('countries')
         .select('id')
         .eq('name', country)
         .single();
-
-      if (countryData && (countryData as { id?: string }).id) {
-        const { data: fallbackData } = await supabase
-          .from('norm_sections')
-          .select(`
-            id,
-            norm_id,
-            section_type,
-            section_number,
-            section_title,
-            content,
-            norms!inner(code, title, country_id, countries(name))
-          `)
-          .eq('norms.country_id', (countryData as { id?: string }).id)
-          .ilike('content', `%${query}%`)
-          .limit(limit);
-
-        if (fallbackData && fallbackData.length > 0) {
-          return fallbackData.map((item: Record<string, unknown>) => {
-            const norms = item.norms as Record<string, unknown>;
-            const countries = norms?.countries as Record<string, unknown> || { name: country };
-            return {
-              sectionId: item.id as string,
-              normId: item.norm_id as string,
-              normCode: norms?.code as string || '',
-              normTitle: norms?.title as string || '',
-              normCountry: countries?.name as string || country,
-              sectionType: item.section_type as string,
-              sectionNumber: item.section_number as string | null,
-              sectionTitle: item.section_title as string | null,
-              content: item.content as string,
-              similarity: 0.3,
-            };
-          });
-        }
+      
+      if (countryData) {
+        queryBuilder.eq('norms.country_id', (countryData as { id?: string }).id);
       }
     }
 
-    return results.map((item: Record<string, unknown>) => ({
-      sectionId: item.section_id as string,
-      normId: item.norm_id as string,
-      normCode: item.norm_code as string,
-      normTitle: item.norm_title as string,
-      normCountry: item.norm_country as string,
-      sectionType: item.section_type as string,
-      sectionNumber: item.section_number as string | null,
-      sectionTitle: item.section_title as string | null,
-      content: item.content as string,
-      similarity: item.similarity as number,
-    }));
+    // Apply content filter (textual search instead of vector similarity)
+    const { data, error } = await queryBuilder
+      .ilike('content', `%${query}%`)
+      .limit(limit);
+
+    if (error) {
+      console.error('[searchNormsSemantic] Erro na busca:', error);
+      throw new Error(`Erro na busca: ${error.message}`);
+    }
+
+    const results = (data || []) as Array<Record<string, unknown>>;
+    console.log('[searchNormsSemantic] Resultados encontrados:', results.length);
+
+    return results.map((item) => {
+      const norms = item.norms as Record<string, unknown>;
+      return {
+        sectionId: String(item.id),
+        normId: String(item.norm_id),
+        normCode: (norms?.code as string) || '',
+        normTitle: (norms?.title as string) || '',
+        normCountry: (norms?.country as string) || '',
+        sectionType: (item.section_type as string) || '',
+        sectionNumber: item.section_number as string | null,
+        sectionTitle: item.section_title as string | null,
+        content: (item.content as string) || '',
+        similarity: 0.3,
+      };
+    });
   } catch (err: unknown) {
     const error = err as Error;
     console.error('[searchNormsSemantic] Erro completo:', error);
