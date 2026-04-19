@@ -226,6 +226,7 @@ export default function UploadPage() {
         fileUrl: pdfUrl,
         content: normContent,
         uploadedBy: user.id,
+        userEmail: user.email,
       });
 
       console.log('Norma processada com sucesso:', result);
