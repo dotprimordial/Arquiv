@@ -31,8 +31,8 @@ export async function processAndUploadNorm(
   const supabaseWrite = getAdminSupabaseClient();
   const adminEmail = process.env.ADMIN_EMAIL || 'seantomasytbr@gmail.com';
 
-  // Server-side validation: verify user is admin
-  if (formData.userEmail !== adminEmail) {
+  // Server-side validation: verify user is admin (case-insensitive, trimmed)
+  if (formData.userEmail?.trim().toLowerCase() !== adminEmail.toLowerCase()) {
     throw new Error(`Acesso negado: apenas ${adminEmail} pode adicionar normas`);
   }
 
