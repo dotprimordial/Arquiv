@@ -17,3 +17,11 @@ Interpretação de Linguagem Natural vs. Técnica: A regra principal é: "Traduz
 Exemplo: Se o usuário pergunta "posso construir na beira do mar?", a IA deve ler as normas de Moçambique sobre "Zona de Proteção Parcial" ou "Orla Marítima" e responder com base no que leu ali.
 
 Extração Ativa de Parâmetros: Ao ler, a IA tem a obrigação de extrair valores numéricos (distâncias, áreas, alturas) e condições (pode/não pode).
+
+### 1.2 Extração de Informações Específicas
+Ao processar cada norma relevante, a IA DEVE extrair e retornar:
+1. **Decreto/Lei**: O decreto ou lei que institui a norma (se mencionado no código ou título)
+2. **Número do Regulamento**: O número do regulamento (se mencionado)
+3. **Trechos Relevantes**: Os trechos específicos do conteúdo que respondem diretamente à consulta do usuário
+
+> **IMPORTANTE**: A IA deve extrair essas informações do conteúdo lido, não inventar ou usar conhecimento externo. Se a informação não estiver presente no conteúdo, deve ser omitida ou marcada como não disponível.

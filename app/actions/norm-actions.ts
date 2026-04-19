@@ -146,6 +146,9 @@ export interface SearchResult {
   sectionTitle: string | null;
   content: string;
   similarity: number;
+  decree?: string;
+  regulationNumber?: string;
+  excerpt?: string;
 }
 
 export interface GroupedSearchResult {
@@ -237,9 +240,13 @@ ${JSON.stringify(normsForAI, null, 2)}
 
 INSTRUÇÕES:
 1. Analise a consulta e determine quais normas são relevantes
-2. Use APENAS os dados fornecidos
-3. NUNCA invente informações
-4. Retorne APENAS JSON válido: [{"id": "uuid", "reasoning": "explicação", "relevanceScore": 0.95}]`,
+2. Para cada norma relevante, extraia:
+   - Decreto/Lei (se mencionado no código ou título)
+   - Número do regulamento (se mencionado)
+   - Trechos relevantes do conteúdo que respondem à consulta
+3. Use APENAS os dados fornecidos
+4. NUNCA invente informações
+5. Retorne APENAS JSON válido: [{"id": "uuid", "reasoning": "explicação", "relevanceScore": 0.95, "decree": "Decreto-Lei n.º X/2024", "regulationNumber": "número", "excerpt": "trecho relevante do conteúdo"}]`,
       },
     ];
 
@@ -278,7 +285,14 @@ INSTRUÇÕES:
     // Extract JSON from response
     const cleanedText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     
-    let aiResults: Array<{ id: string; reasoning: string; relevanceScore: number }>;
+    let aiResults: Array<{ 
+      id: string; 
+      reasoning: string; 
+      relevanceScore: number;
+      decree?: string;
+      regulationNumber?: string;
+      excerpt?: string;
+    }>;
     try {
       const parsed = JSON.parse(cleanedText);
       aiResults = Array.isArray(parsed) ? parsed : parsed.results || [];
@@ -314,6 +328,9 @@ INSTRUÇÕES:
           sectionTitle: null,
           content: ((norm.content as string) || '') + ' ' + ((norm.description as string) || ''),
           similarity: aiResult.relevanceScore,
+          decree: aiResult.decree,
+          regulationNumber: aiResult.regulationNumber,
+          excerpt: aiResult.excerpt,
         };
       })
       .filter((r) => r !== null);
@@ -364,6 +381,9 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
       sectionTitle: null,
       content: ((item.norm.content as string) || '') + ' ' + ((item.norm.description as string) || ''),
       similarity: item.score / 10,
+      decree: undefined,
+      regulationNumber: undefined,
+      excerpt: undefined,
     }));
 }
 
