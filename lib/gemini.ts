@@ -9,12 +9,15 @@ export interface Norm {
   id: string;
   code: string;
   title: string;
-  category: string;
+  category_id: number;
+  country_id: number;
   description?: string;
   keywords?: string[];
   reasoning?: string;
   excerpt?: string;
   file_url?: string;
+  category?: string;
+  country?: string;
   [key: string]: unknown;
 }
 
@@ -41,8 +44,8 @@ export const getArchitecturalNorms = async (
   try {
     const isSearchMode = queryText && queryText.trim() !== "";
 
-    // Carregar apenas campos leves — sem content completo na listagem/busca
-    const selectFields = "id, code, title, description, category, country, keywords, total_sections";
+    // FIX #21: Use NORMALIZED schema - select fields from norms with FK ids
+    const selectFields = "id, code, title, description, category_id, country_id, keywords, total_sections";
 
     console.log(`[getArchitecturalNorms] Modo: ${isSearchMode ? "PESQUISA" : "LISTA SIMPLES"}`);
     console.log(`[getArchitecturalNorms] DEBUG - Country: "${country}" | Category: "${category}" | Query: "${queryText || 'none'}"`);
@@ -51,19 +54,39 @@ export const getArchitecturalNorms = async (
     let error: Error | null = null;
 
     try {
+      // Get country ID from country name
+      const { data: countryData, error: countryError } = await supabase
+        .from("countries")
+        .select("id")
+        .eq("name", country)
+        .single();
+
+      if (countryError || !countryData) {
+        console.error("[getArchitecturalNorms] País não encontrado:", country);
+        return [];
+      }
+
       let query = supabase
         .from("norms")
         .select(selectFields)
-        .eq("country", country); // FIX #3: Filtro de país sempre aplicado
+        .eq("country_id", (countryData as { id?: string }).id);
 
       if (category !== "Todas") {
-        query = query.eq("category", category);
+        const { data: catData, error: catError } = await supabase
+          .from("categories")
+          .select("id")
+          .eq("name", category)
+          .single();
+
+        if (!catError && catData) {
+          query = query.eq("category_id", (catData as { id?: string }).id);
+        }
       }
 
       const result = await query.limit(50);
       data = result.data as Norm[] | null;
       error = result.error as Error | null;
-      
+
       console.log(`[getArchitecturalNorms] DEBUG - Loaded ${data?.length || 0} norms from Supabase`);
       if (data && data.length > 0) {
         console.log(`[getArchitecturalNorms] DEBUG - Sample norms:`, data.slice(0, 3).map(n => ({ code: n.code, title: n.title.substring(0, 40) })));
@@ -91,18 +114,18 @@ export const getArchitecturalNorms = async (
       }));
     }
 
-    // FIX #4: Se useAi=true e tiver API key, tentar busca com IA primeiro
+    // FIX #22: If useAi=true and tener API key, try search with AI first
     if (useAi && !isInvalidKey(apiKey)) {
       try {
         const openRouter = new OpenRouterClient(apiKey);
-        
+
         const normsForAI = data.slice(0, 15).map((norm) => ({
           id: norm.id,
           code: norm.code,
           title: norm.title,
           description: (norm.description || "").substring(0, 300),
           keywords: norm.keywords || [],
-          category: norm.category,
+          category_id: norm.category_id,
         }));
 
         const messages: OpenRouterMessage[] = [
@@ -126,7 +149,7 @@ INSTRUÇÕES:
         console.log("[getArchitecturalNorms] Usando IA para busca...");
         const response = await openRouter.chatCompletion(
           messages,
-          "qwen/qwen3-next-80b-a3b-instruct:free",
+          "google/gemma-4-31b-it:free",
           0.1,
           { type: "json_object" }
         );
@@ -159,13 +182,13 @@ INSTRUÇÕES:
       }
     }
 
-    // FIX #5: Busca textual direta no banco (fallback ou quando useAi=false)
+    // FIX #23: Busca textual direta using normalized data
     const lowerQuery = queryText.toLowerCase().trim();
-    
+
     console.log(`[getArchitecturalNorms] DEBUG - Query: "${lowerQuery}"`);
     console.log(`[getArchitecturalNorms] DEBUG - Total norms loaded: ${data.length}`);
     console.log(`[getArchitecturalNorms] DEBUG - First 3 norms:`, data.slice(0, 3).map(n => ({ code: n.code, title: n.title.substring(0, 30) })));
-    
+
     const scoredResults = data
       .map((n: Norm) => {
         let score = 0;
@@ -173,39 +196,39 @@ INSTRUÇÕES:
         const code = n.code.toLowerCase();
         const desc = (n.description || "").toLowerCase();
         const keywords = (n.keywords || []).map(k => k.toLowerCase());
-        
+
         // Buscar em code, title, description e keywords
         if (title.includes(lowerQuery)) score += 10;
         if (code.includes(lowerQuery)) score += 8;
         if (keywords.some(k => k.includes(lowerQuery))) score += 6;
         if (desc.includes(lowerQuery)) score += 4;
-        
+
         // DEBUG: Log when we find a match
         if (score > 0) {
           console.log(`[getArchitecturalNorms] DEBUG - Match found: code="${n.code}" title="${n.title.substring(0, 40)}" score=${score}`);
         }
-        
+
         return { norm: n, score };
       })
       .filter(item => item.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 10)
-      .map(item => ({ 
-        ...item.norm, 
-        reasoning: item.norm.description || `Norma ${item.norm.code} — ${item.norm.title}` 
+      .map(item => ({
+        ...item.norm,
+        reasoning: item.norm.description || `Norma ${item.norm.code} — ${item.norm.title}`
       }));
-    
+
     console.log(`[getArchitecturalNorms] Busca textual: ${scoredResults.length} resultados`);
-    
+
     if (scoredResults.length === 0) {
       // Se não encontrou, retornar todas as normas do país
       console.log(`[getArchitecturalNorms] DEBUG - No matches, returning all ${data.length} norms`);
-      return data.slice(0, 10).map((n) => ({ 
-        ...n, 
-        reasoning: n.description || `Norma ${n.code} — ${n.title}` 
+      return data.slice(0, 10).map((n) => ({
+        ...n,
+        reasoning: n.description || `Norma ${n.code} — ${n.title}`
       }));
     }
-    
+
     return scoredResults;
   } catch (outerError) {
     console.error("[getArchitecturalNorms] Erro geral:", outerError);
@@ -261,7 +284,7 @@ Responda APENAS com JSON válido, sem markdown:
 
     const messages: OpenRouterMessage[] = [{ role: "user", content: prompt + "\n\nDOCUMENTO:\n" + content.substring(0, 12000) }];
 
-    const response = await openRouter.chatCompletion(messages, "anthropic/claude-3-haiku", 0.1, {
+    const response = await openRouter.chatCompletion(messages, "google/gemma-4-31b-it:free", 0.1, {
       type: "json_object",
     });
 
@@ -283,10 +306,21 @@ export const getFullNormContent = async (country: string, code: string): Promise
   console.log(`Buscando conteúdo para norma ${code} do país ${country}`);
 
   try {
+    // Get country ID
+    const { data: countryData, error: countryError } = await supabase
+      .from("countries")
+      .select("id")
+      .eq("name", country)
+      .single();
+
+    if (countryError || !countryData) {
+      throw new Error(`País "${country}" não encontrado`);
+    }
+
     const { data, error } = await supabase
       .from("norms")
       .select("content, title")
-      .eq("country", country)
+      .eq("country_id", (countryData as { id?: string }).id)
       .eq("code", code)
       .maybeSingle();
 
@@ -311,19 +345,21 @@ export const getFullNormContentById = async (normId: string): Promise<string> =>
   console.log(`[getFullNormContentById] Buscando norma pelo ID: ${normId}`);
 
   try {
+    // FIX #26: Use normalized schema with JOIN to countries table for country name
     const { data, error } = await supabase
       .from("norms")
-      .select("content, structured_content, file_url, file_type, code, title, country")
+      .select("content, structured_content, file_url, file_type, code, title, country_id, countries(name)")
       .eq("id", normId)
       .maybeSingle();
 
-    if (!error && data) {
-      if (data.file_url) {
-        console.log(`[getFullNormContentById] PDF encontrado: ${data.file_url}`);
-        return `PDF:${data.file_url}`;
-      } else if (data.content || data.structured_content) {
+    const normData = data as { file_url?: string; content?: string; structured_content?: string } | null;
+    if (!error && normData) {
+      if (normData.file_url) {
+        console.log(`[getFullNormContentById] PDF encontrado: ${normData.file_url}`);
+        return `PDF:${normData.file_url}`;
+      } else if (normData.content || normData.structured_content) {
         console.log(`[getFullNormContentById] Conteúdo encontrado no Supabase`);
-        return data.content || data.structured_content;
+        return normData.content || normData.structured_content || '';
       }
     } else if (error) {
       console.error("❌ Erro do Supabase:", JSON.stringify(error, null, 2));
@@ -359,16 +395,31 @@ export const updateNorm = async (id: string, updates: Partial<Norm>) => {
 
 export const getActiveCountries = async (): Promise<string[]> => {
   try {
-    // FIX #8: Selecionar apenas o campo country (não todos os campos)
-    const { data, error } = await supabase.from("norms").select("country");
+    // Get unique countries that have norms
+    const { data, error } = await supabase
+      .from("norms")
+      .select("country_id, countries(name)")
+      .not('country_id', 'is', null);
+
     if (error) {
       console.error("Error fetching active countries:", error);
-      return ["Portugal", "Brasil", "Moçambique", "Angola"];
+      return [];
     }
-    const countries = data.map((item) => item.country);
-    return Array.from(new Set(countries));
+
+    // Extract unique country names from joined data
+    const countries = new Set<string>();
+    (data || []).forEach((item) => {
+      const countryData = item as { countries?: { name?: string }[] };
+      if (countryData.countries && countryData.countries[0]?.name) {
+        countries.add(countryData.countries[0].name);
+      }
+    });
+
+    const result = Array.from(countries);
+    console.log("[getActiveCountries] Países encontrados:", result);
+    return result;
   } catch (err) {
     console.error("Connection error fetching countries:", err);
-    return ["Portugal", "Brasil", "Moçambique", "Angola"];
+    return [];
   }
 };

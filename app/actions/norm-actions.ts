@@ -1,20 +1,8 @@
 'use server';
 
-import { supabase } from '@/lib/supabase';
-import { analyzeDocumentStructure, generateSectionEmbeddings, chunkDocument } from '@/lib/semantic-search';
+import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from '@/lib/supabase-server';
 
 const apiKey = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || '';
-
-// Simple hash function for browser compatibility (replaces crypto.createHash)
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return Math.abs(hash).toString(16);
-}
 
 export interface UploadResult {
   normId: string;
@@ -32,118 +20,118 @@ export async function processAndUploadNorm(
     fileUrl?: string | null;
     content?: string | null;
     uploadedBy: string;
+    userEmail?: string;
   }
 ): Promise<UploadResult> {
   console.log('[processAndUploadNorm] === INÍCIO ===');
-  console.log('[processAndUploadNorm] Dados recebidos:', {
-    title: formData.title,
-    code: formData.code,
-    country: formData.country,
-    category: formData.category,
-    fileType: formData.fileType,
-    hasFileUrl: !!formData.fileUrl,
-    hasContent: !!formData.content,
-    contentLength: formData.content?.length || 0,
-    uploadedBy: formData.uploadedBy
-  });
+  console.log('[processAndUploadNorm] Dados recebidos:', formData);
+
+  const supabase = await getAuthenticatedSupabaseClient();
+  // For write operations, prefer the admin client (bypasses RLS when SERVICE_ROLE_KEY is set)
+  const supabaseWrite = getAdminSupabaseClient();
+  const adminEmail = process.env.ADMIN_EMAIL || 'seantomasytbr@gmail.com';
+
+  // Server-side validation: verify user is admin (case-insensitive, trimmed)
+  if (formData.userEmail?.trim().toLowerCase() !== adminEmail.toLowerCase()) {
+    throw new Error(`Acesso negado: apenas ${adminEmail} pode adicionar normas`);
+  }
 
   try {
-    console.log('[processAndUploadNorm] Etapa 1: Inserindo norma no Supabase...');
+    // Step 1: Resolve country name to ID
+    console.log(`[processAndUploadNorm] Resolvendo país: "${formData.country}"`);
+    const { data: countryData, error: countryError } = await supabase
+      .from('countries')
+      .select('id')
+      .eq('name', formData.country.trim());
 
+    if (countryError) {
+      console.error('[processAndUploadNorm] Erro ao buscar país:', countryError);
+      throw new Error(`Erro ao buscar país: ${countryError.message}`);
+    }
+
+    if (!countryData || countryData.length === 0) {
+      throw new Error(`País "${formData.country}" não encontrado no banco de dados`);
+    }
+
+    const countryId = countryData[0].id;
+    console.log(`[processAndUploadNorm] ✓ País encontrado: ${countryId}`);
+
+    // Step 2: Resolve category name to ID
+    console.log(`[processAndUploadNorm] Resolvendo categoria: "${formData.category}"`);
+    const { data: categoryData, error: categoryError } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('name', formData.category.trim());
+
+    if (categoryError) {
+      console.error('[processAndUploadNorm] Erro ao buscar categoria:', categoryError);
+      throw new Error(`Erro ao buscar categoria: ${categoryError.message}`);
+    }
+
+    if (!categoryData || categoryData.length === 0) {
+      throw new Error(`Categoria "${formData.category}" não encontrada no banco de dados`);
+    }
+
+    const categoryId = categoryData[0].id;
+    console.log(`[processAndUploadNorm] ✓ Categoria encontrada: ${categoryId}`);
+
+    // Step 3: Insert norm
+    console.log('[processAndUploadNorm] Inserindo norma...');
     const insertData = {
-      code: formData.code,
-      title: formData.title,
-      country: formData.country,
-      category: formData.category,
+      code: formData.code.trim(),
+      title: formData.title.trim(),
+      country_id: countryId,
+      category_id: categoryId,
       file_type: formData.fileType,
-      file_url: formData.fileUrl,
-      content: formData.content,
+      file_url: formData.fileUrl || null,
+      content: formData.content || null,
       uploaded_by: formData.uploadedBy,
     };
 
-    const { data: normData, error: normError } = await supabase
+    console.log('[processAndUploadNorm] Insert data:', insertData);
+
+    const { data: normData, error: normError } = await supabaseWrite
       .from('norms')
       .insert(insertData)
       .select()
       .single();
 
     if (normError) {
-      console.error('[processAndUploadNorm] ERRO no insert:', normError);
-      throw new Error(`Falha ao criar norma: ${normError.message}`);
+      console.error('[processAndUploadNorm] Erro no insert:', normError);
+      throw new Error(`Erro ao inserir norma: ${normError.message}`);
     }
 
     if (!normData) {
-      throw new Error('Falha ao criar norma: nenhum dado retornado');
+      throw new Error('Falha ao criar norma: sem dados retornados');
     }
 
     const normId = normData.id;
-    console.log('[processAndUploadNorm] ✓ Norma criada com ID:', normId);
+    console.log(`[processAndUploadNorm] ✓ Norma criada: ${normId}`);
 
-    let documentText = '';
-
-    if (formData.fileType === 'text' && formData.content) {
-      documentText = formData.content;
-    } else if (formData.fileType === 'pdf' && formData.fileUrl) {
-      documentText = `${formData.title}\n${formData.code}\nConteúdo do PDF - extração necessária`;
-    }
-
-    if (!documentText || documentText.length < 50) {
-      console.warn('[processAndUploadNorm] Documento sem conteúdo suficiente para análise');
-      return { normId, sectionsCreated: 0, embeddingsGenerated: 0 };
-    }
-
-    const sections = await analyzeDocumentStructure(documentText, apiKey);
-    console.log(`[processAndUploadNorm] ✓ Estrutura analisada: ${sections.length} seções`);
-
-    const chunkedSections = chunkDocument(sections, 2000);
-    console.log(`[processAndUploadNorm] ✓ Após chunking: ${chunkedSections.length} seções`);
-
-    const sectionsWithEmbeddings = await generateSectionEmbeddings(chunkedSections, apiKey);
-    console.log(`[processAndUploadNorm] ✓ Embeddings gerados: ${sectionsWithEmbeddings.length}`);
-
-    let sectionsInserted = 0;
-    let sectionsErrorCount = 0;
-
-    for (let i = 0; i < sectionsWithEmbeddings.length; i++) {
-      const section = sectionsWithEmbeddings[i];
-
-      const { error: sectionError } = await supabase
-        .from('norm_sections')
-        .insert({
-          norm_id: normId,
-          section_type: section.sectionType,
-          section_number: section.sectionNumber,
-          section_title: section.sectionTitle,
-          content: section.content,
-          content_raw: section.content,
-          embedding: section.embedding,
-          order_index: section.orderIndex,
-        });
-
-      if (sectionError) {
-        console.error(`[processAndUploadNorm] Erro ao inserir seção ${i + 1}:`, sectionError);
-        sectionsErrorCount++;
-      } else {
-        sectionsInserted++;
-      }
-    }
-
-    console.log(`[processAndUploadNorm] Seções: ${sectionsInserted} inseridas, ${sectionsErrorCount} erros`);
-
-    await supabase
-      .from('norms')
-      .update({ total_sections: sectionsInserted })
-      .eq('id', normId);
+    console.log(`[processAndUploadNorm] === SUCESSO ===`);
 
     return {
       normId,
-      sectionsCreated: sectionsInserted,
-      embeddingsGenerated: sectionsWithEmbeddings.length,
+      sectionsCreated: 0,
+      embeddingsGenerated: 0,
     };
   } catch (error: unknown) {
-    const err = error as Error;
-    console.error('[processAndUploadNorm] ERRO:', err?.message);
-    throw error;
+    console.error('[processAndUploadNorm] === ERRO ===');
+    if (error instanceof Error) {
+      console.error('[processAndUploadNorm] Mensagem:', error.message);
+      console.error('[processAndUploadNorm] Stack:', error.stack);
+      throw new Error(error.message);
+    } else {
+      try {
+        const errorStr = JSON.stringify(error);
+        console.error('[processAndUploadNorm] Erro:', errorStr);
+        throw new Error(errorStr);
+      } catch {
+        const errorMsg = error && typeof error === 'object' ? Object.prototype.toString.call(error) : String(error);
+        console.error('[processAndUploadNorm] Erro:', errorMsg);
+        throw new Error(errorMsg);
+      }
+    }
   }
 }
 
@@ -158,6 +146,9 @@ export interface SearchResult {
   sectionTitle: string | null;
   content: string;
   similarity: number;
+  decree?: string;
+  regulationNumber?: string;
+  excerpt?: string;
 }
 
 export interface GroupedSearchResult {
@@ -168,50 +159,18 @@ export interface GroupedSearchResult {
   sections: SearchResult[];
 }
 
-// FIX #9: Cache de embeddings em memória para evitar chamadas repetidas
-const embeddingCache = new Map<string, number[]>();
-
-async function getQueryEmbedding(query: string): Promise<number[]> {
-  const cacheKey = simpleHash(query.toLowerCase().trim());
-
-  if (embeddingCache.has(cacheKey)) {
-    console.log('[getQueryEmbedding] Cache hit para:', query.substring(0, 50));
-    return embeddingCache.get(cacheKey)!;
-  }
-
-  const embeddingResponse = await fetch('https://openrouter.ai/api/v1/embeddings', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://arquiv.org',
-    },
-    body: JSON.stringify({
-      model: 'openai/text-embedding-3-small',
-      input: query,
-    }),
-  });
-
-  if (!embeddingResponse.ok) {
-    const errorText = await embeddingResponse.text();
-    throw new Error(`Falha ao gerar embedding: ${embeddingResponse.status} - ${errorText.substring(0, 200)}`);
-  }
-
-  const embeddingData = await embeddingResponse.json();
-  const embedding = embeddingData.data?.[0]?.embedding;
-
-  if (!embedding) {
-    throw new Error('Embedding não retornado pela API');
-  }
-
-  // Limitar cache a 100 entradas para evitar uso excessivo de memória
-  if (embeddingCache.size >= 100) {
-    const firstKey = embeddingCache.keys().next().value;
-    if (firstKey) embeddingCache.delete(firstKey);
-  }
-
-  embeddingCache.set(cacheKey, embedding);
-  return embedding;
+// Function to clean HTML formatting from text
+function cleanHtmlFormatting(text: string): string {
+  return text
+    .replace(/<[^>]*>/g, '') // Remove HTML tags
+    .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+    .replace(/&amp;/g, '&') // Replace &amp; with &
+    .replace(/&lt;/g, '<') // Replace &lt; with <
+    .replace(/&gt;/g, '>') // Replace &gt; with >
+    .replace(/&quot;/g, '"') // Replace &quot; with "
+    .replace(/&#39;/g, "'") // Replace &#39; with '
+    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .trim();
 }
 
 export async function searchNormsSemantic(
@@ -219,120 +178,237 @@ export async function searchNormsSemantic(
   country?: string,
   limit: number = 10
 ): Promise<SearchResult[]> {
-  console.log('[searchNormsSemantic] Iniciando busca:', { query, country, limit });
+  console.log('[searchNormsSemantic] Iniciando busca com IA:', { query, country, limit });
 
   if (!apiKey || apiKey === '' || apiKey === 'MY_OPENROUTER_API_KEY') {
     console.warn('[searchNormsSemantic] API Key não configurada - busca semântica desativada');
     return [];
   }
 
+  let norms: Array<Record<string, unknown>> = [];
+  
   try {
-    console.log('[searchNormsSemantic] Gerando/recuperando embedding...');
-    // FIX #9: Usar cache de embeddings
-    const queryEmbedding = await getQueryEmbedding(query);
-
-    console.log('[searchNormsSemantic] Chamando RPC search_norm_sections...');
-    const { data, error } = await supabase
-      .rpc('search_norm_sections', {
-        query_embedding: queryEmbedding,
-        match_threshold: 0.4, // FIX #10: Reduzir threshold para mais resultados
-        match_count: limit,
-        p_country: country || null,
-      });
-
-    if (error) {
-      console.error('[searchNormsSemantic] Erro na busca RPC:', error);
-      throw new Error(`Erro na busca: ${error.message}`);
-    }
-
-    const results = data || [];
-    console.log('[searchNormsSemantic] Resultados encontrados:', results.length);
+    const { supabase } = await import('@/lib/supabase');
+    console.log('[searchNormsSemantic] Buscando todas as normas para análise...');
     
-    // DEBUG: Verificar se o filtro de país está funcionando
-    if (results.length > 0) {
-      const countriesInResults = results.map((r: { norm_country?: string }) => r.norm_country);
-      console.log('[searchNormsSemantic] DEBUG - Países nos resultados:', countriesInResults);
-      console.log('[searchNormsSemantic] DEBUG - País esperado:', country);
+    // Fetch all norms
+    const queryBuilder = supabase
+      .from('norms')
+      .select(`
+        id,
+        code,
+        title,
+        description,
+        content,
+        country,
+        keywords
+      `);
+
+    // Apply country filter if provided
+    if (country) {
+      const { data: countryData } = await supabase
+        .from('countries')
+        .select('id')
+        .eq('name', country)
+        .single();
       
-      // Verificar se há resultados de países errados
-      const wrongCountries = countriesInResults.filter(c => c !== country);
-      if (wrongCountries.length > 0) {
-        console.error('[searchNormsSemantic] ERRO - Resultados de países errados:', wrongCountries);
+      if (countryData) {
+        queryBuilder.eq('country_id', (countryData as { id?: string }).id);
       }
     }
 
-    // FIX #11: Se semântica não retornar resultados, tentar busca textual como fallback
-    if (results.length === 0 && country) {
-      console.log('[searchNormsSemantic] Sem resultados semânticos, tentando fallback textual...');
-      const { data: fallbackData } = await supabase
-        .from('norm_sections')
-        .select(`
-          id,
-          norm_id,
-          section_type,
-          section_number,
-          section_title,
-          content,
-          norms!inner(code, title, country)
-        `)
-        .eq('norms.country', country)
-        .ilike('content', `%${query}%`)
-        .limit(limit);
+    const { data: normsData, error: normsError } = await queryBuilder;
 
-      if (fallbackData && fallbackData.length > 0) {
-        return fallbackData.map((item: Record<string, unknown>) => {
-          const norms = item.norms as Record<string, unknown>;
-          return {
-            sectionId: item.id as string,
-            normId: item.norm_id as string,
-            normCode: norms?.code as string || '',
-            normTitle: norms?.title as string || '',
-            normCountry: norms?.country as string || '',
-            sectionType: item.section_type as string,
-            sectionNumber: item.section_number as string | null,
-            sectionTitle: item.section_title as string | null,
-            content: item.content as string,
-            similarity: 0.3,
-          };
-        });
-      }
+    if (normsError) {
+      console.error('[searchNormsSemantic] Erro ao buscar normas:', normsError);
+      throw new Error(`Erro ao buscar normas: ${normsError.message}`);
     }
 
-    return results.map((item: Record<string, unknown>) => ({
-      sectionId: item.section_id as string,
-      normId: item.norm_id as string,
-      normCode: item.norm_code as string,
-      normTitle: item.norm_title as string,
-      normCountry: item.norm_country as string,
-      sectionType: item.section_type as string,
-      sectionNumber: item.section_number as string | null,
-      sectionTitle: item.section_title as string | null,
-      content: item.content as string,
-      similarity: item.similarity as number,
+    norms = (normsData || []) as Array<Record<string, unknown>>;
+    console.log('[searchNormsSemantic] Normas encontradas:', norms.length);
+
+    if (norms.length === 0) {
+      return [];
+    }
+
+    // Prepare data for AI analysis (clean HTML formatting)
+    const normsForAI = norms.map((norm) => ({
+      id: norm.id,
+      code: cleanHtmlFormatting(String(norm.code || "")),
+      title: cleanHtmlFormatting(String(norm.title || "")),
+      description: cleanHtmlFormatting(String(norm.description || "")).substring(0, 500),
+      content: cleanHtmlFormatting(String(norm.content || "")).substring(0, 1000),
+      keywords: (norm.keywords as string[]) || [],
     }));
+
+    // Clean query as well
+    const cleanedQuery = cleanHtmlFormatting(query);
+
+    // Call AI to analyze relevance
+    const messages: Array<{ role: string; content: string }> = [
+      {
+        role: "user",
+        content: `Você é um especialista em normas arquitetônicas.
+
+Consulta: "${cleanedQuery}" | País: ${country || 'Todos'}
+
+Normas disponíveis (${normsForAI.length}):
+${JSON.stringify(normsForAI, null, 2)}
+
+INSTRUÇÕES:
+1. Analise a consulta e determine quais normas são relevantes
+2. Para cada norma relevante, extraia:
+   - Decreto/Lei (se mencionado no código ou título)
+   - Número do regulamento (se mencionado)
+   - Trechos relevantes do conteúdo que respondem à consulta
+3. Use APENAS os dados fornecidos
+4. NUNCA invente informações
+5. Retorne APENAS JSON válido: [{"id": "uuid", "reasoning": "explicação", "relevanceScore": 0.95, "decree": "Decreto-Lei n.º X/2024", "regulationNumber": "número", "excerpt": "trecho relevante do conteúdo"}]`,
+      },
+    ];
+
+    console.log('[searchNormsSemantic] Enviando para IA...');
+    const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://arquiv.org',
+      },
+      body: JSON.stringify({
+        model: 'google/gemma-4-31b-it:free',
+        messages,
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error('[searchNormsSemantic] Erro na API IA:', aiResponse.status, errorText);
+      
+      // Fallback to textual search on rate limit or error
+      if (aiResponse.status === 429) {
+        console.warn('[searchNormsSemantic] Rate limit, usando fallback textual...');
+        return fallbackTextualSearch(norms, query, limit);
+      }
+      
+      throw new Error(`Erro na API IA: ${aiResponse.status}`);
+    }
+
+    const aiData = await aiResponse.json();
+    const rawText = aiData.choices?.[0]?.message?.content || "[]";
+    
+    // Extract JSON from response
+    const cleanedText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    let aiResults: Array<{ 
+      id: string; 
+      reasoning: string; 
+      relevanceScore: number;
+      decree?: string;
+      regulationNumber?: string;
+      excerpt?: string;
+    }>;
+    try {
+      const parsed = JSON.parse(cleanedText);
+      aiResults = Array.isArray(parsed) ? parsed : parsed.results || [];
+    } catch {
+      console.error('[searchNormsSemantic] Erro ao parsear JSON IA:', cleanedText.substring(0, 200));
+      aiResults = [];
+    }
+
+    console.log('[searchNormsSemantic] Resultados IA:', aiResults.length);
+
+    // If AI returns no results, fallback to textual search
+    if (aiResults.length === 0) {
+      console.warn('[searchNormsSemantic] IA não retornou resultados, usando fallback textual...');
+      return fallbackTextualSearch(norms, query, limit);
+    }
+
+    // Map AI results to SearchResult format
+    const results = aiResults
+      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      .slice(0, limit)
+      .map((aiResult) => {
+        const norm = norms.find((n) => n.id === aiResult.id);
+        if (!norm) return null;
+        
+        return {
+          sectionId: String(norm.id),
+          normId: String(norm.id),
+          normCode: (norm.code as string) || '',
+          normTitle: (norm.title as string) || '',
+          normCountry: (norm.country as string) || '',
+          sectionType: 'norma',
+          sectionNumber: null,
+          sectionTitle: null,
+          content: ((norm.content as string) || '') + ' ' + ((norm.description as string) || ''),
+          similarity: aiResult.relevanceScore,
+          decree: aiResult.decree,
+          regulationNumber: aiResult.regulationNumber,
+          excerpt: aiResult.excerpt,
+        };
+      })
+      .filter((r) => r !== null);
+
+    return results as SearchResult[];
   } catch (err: unknown) {
     const error = err as Error;
     console.error('[searchNormsSemantic] Erro completo:', error);
-    throw new Error(error.message || 'Erro interno na busca semântica');
+    
+    // Fallback to textual search on any error
+    console.warn('[searchNormsSemantic] Erro na IA, usando fallback textual...');
+    return fallbackTextualSearch(norms, query, limit);
   }
+}
+
+// Fallback textual search function
+function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: string, limit: number): SearchResult[] {
+  const queryLower = cleanHtmlFormatting(query).toLowerCase();
+  
+  const scored = norms.map((norm) => {
+    let score = 0;
+    const code = cleanHtmlFormatting(String(norm.code || '')).toLowerCase();
+    const title = cleanHtmlFormatting(String(norm.title || '')).toLowerCase();
+    const description = cleanHtmlFormatting(String(norm.description || '')).toLowerCase();
+    const content = cleanHtmlFormatting(String(norm.content || '')).toLowerCase();
+    const keywords = ((norm.keywords as string[]) || []).map(k => k.toLowerCase());
+    
+    if (code.includes(queryLower)) score += 10;
+    if (title.includes(queryLower)) score += 8;
+    if (description.includes(queryLower)) score += 4;
+    if (content.includes(queryLower)) score += 3;
+    if (keywords.some(k => k.includes(queryLower))) score += 5;
+    
+    return { norm, score };
+  }).filter(item => item.score > 0);
+  
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(item => ({
+      sectionId: String(item.norm.id),
+      normId: String(item.norm.id),
+      normCode: (item.norm.code as string) || '',
+      normTitle: (item.norm.title as string) || '',
+      normCountry: (item.norm.country as string) || '',
+      sectionType: 'norma',
+      sectionNumber: null,
+      sectionTitle: null,
+      content: cleanHtmlFormatting(((item.norm.content as string) || '') + ' ' + ((item.norm.description as string) || '')),
+      similarity: item.score / 10,
+      decree: undefined,
+      regulationNumber: undefined,
+      excerpt: undefined,
+    }));
 }
 
 // FIX #7: deleteNormServer — Server Action para contornar RLS do cliente
 export async function deleteNormServer(id: string): Promise<void> {
   if (!id) throw new Error('ID da norma é obrigatório');
 
-  // FIX #12: Deletar seções primeiro (em cascata) para evitar foreign key errors
-  const { error: sectionsError } = await supabase
-    .from('norm_sections')
-    .delete()
-    .eq('norm_id', id);
-
-  if (sectionsError) {
-    console.error('[deleteNormServer] Erro ao deletar seções:', sectionsError);
-    // Não lançar erro aqui — a cascade constraint deve cuidar disso
-    // mas logamos para diagnóstico
-  }
-
+  const supabase = getAdminSupabaseClient();
   const { error } = await supabase
     .from('norms')
     .delete()

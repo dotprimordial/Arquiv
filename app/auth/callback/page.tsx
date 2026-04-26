@@ -69,8 +69,8 @@ export default function AuthCallbackPage() {
             console.error('[AuthCallback] Error exchanging code:', error);
             console.error('[AuthCallback] Error details:', {
               message: error.message,
-              status: (error as any).status,
-              code: (error as any).code
+              status: (error as { status?: number }).status,
+              code: (error as { code?: string }).code
             });
             setError(`Erro na autenticação: ${error.message}`);
             return;

@@ -2,12 +2,13 @@ import type { Metadata } from 'next';
 import { Inter, Space_Grotesk, Playfair_Display } from 'next/font/google';
 import localFont from 'next/font/local';
 import Script from 'next/script';
+import { Toaster } from 'sonner';
 import './globals.css';
 import AdScript from '@/components/AdScript';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 
-// Força o uso do Edge Runtime, essencial para o Cloudflare Pages com Next.js 15
-export const runtime = 'edge';
+// Use nodejs runtime for better compatibility with database operations
+export const runtime = 'nodejs';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -58,6 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt" suppressHydrationWarning className={`${inter.variable} ${spaceGrotesk.variable} ${playfair.variable} ${equinox.variable}`}>
       <body suppressHydrationWarning className="font-sans antialiased">
         {children}
+        <Toaster position="top-center" richColors />
         <AdScript />
         <ServiceWorkerRegister />
         <Script 

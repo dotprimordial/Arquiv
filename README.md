@@ -1,8 +1,9 @@
-# Arquiv - Architectural Norms Platform
-
 <div align="center">
-  <h3>🏗️ Plataforma completa para consulta de normas arquitetônicas por país</h3>
-  <p>Busca inteligente, upload de PDFs, e visualização de regulamentos de construção</p>
+# Arquiv - Plataforma de Normas de Contrução
+</div>
+<div align="center">
+  <h3>Plataforma completa para consulta automatica de normas arquitetônicas por país</h3>
+  <p>Busca inteligente, pesquise pela situação e receba a norma ideal para tal</p>
 </div>
 
 ## ✨ Features

@@ -28,7 +28,7 @@ export class OpenRouterClient {
 
   async chatCompletion(
     messages: OpenRouterMessage[],
-    model: string = 'openrouter/elephant-alpha',
+    model: string = 'google/gemma-4-31b-it:free',
     temperature: number = 0.7,
     responseFormat?: { type: 'json_object' }
   ): Promise<OpenRouterResponse> {

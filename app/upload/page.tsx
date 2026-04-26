@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { FileText, AlertCircle, Loader2, ArrowLeft, Upload, File } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { extractDocumentStructure } from '@/lib/gemini';
 import { processAndUploadNorm } from '@/app/actions/norm-actions';
@@ -51,7 +52,6 @@ export default function UploadPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [autoCategories, setAutoCategories] = useState<string[]>([]);
-  const [autoKeywords, setAutoKeywords] = useState<string[]>([]);
 
   const router = useRouter();
 
@@ -63,7 +63,6 @@ export default function UploadPage() {
     try {
       const result = await extractDocumentStructure(content, title);
       setAutoCategories(result.categories);
-      setAutoKeywords(result.keywords);
       
       // Se a categoria atual não estiver nas categorias sugeridas, usar a primeira sugerida
       if (result.categories.length > 0 && !result.categories.includes(category)) {
@@ -227,10 +226,13 @@ export default function UploadPage() {
         fileUrl: pdfUrl,
         content: normContent,
         uploadedBy: user.id,
+        userEmail: user.email,
       });
 
       console.log('Norma processada com sucesso:', result);
-      alert(`Norma processada!\nSeções: ${result.sectionsCreated}\nEmbeddings: ${result.embeddingsGenerated}`);
+      toast.success('Norma processada com sucesso!', {
+        description: `Seções: ${result.sectionsCreated} | Embeddings: ${result.embeddingsGenerated}`,
+      });
 
       router.push('/');
     } catch (err: unknown) {
