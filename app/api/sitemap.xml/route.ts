@@ -53,24 +53,57 @@ export async function GET() {
     const apiUrl = `${supabaseUrl}/rest/v1/norms?select=id,code,title,updated_at,created_at&order=updated_at.desc`;
     console.log('[Sitemap] Fetching from:', apiUrl);
     
-    const response = await fetch(apiUrl, {
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    let norms: Norm[] = [];
+    let fetchSuccess = false;
+    
+    // Retry logic for Cloudflare/Supabase connectivity issues
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`[Sitemap] Attempt ${attempt}/3...`);
+        
+        const response = await fetch(apiUrl, {
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+          },
+          // Add cache: 'no-store' to prevent edge caching issues
+          cache: 'no-store',
+        });
 
-    console.log('[Sitemap] Response status:', response.status);
+        console.log('[Sitemap] Response status:', response.status);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Sitemap] Error fetching norms:', errorText);
-      return new NextResponse(`Error fetching norms: ${response.status}`, { status: 500 });
+        if (response.ok) {
+          norms = (await response.json()) as Norm[];
+          fetchSuccess = true;
+          console.log('[Sitemap] Fetched', norms.length, 'norms');
+          break;
+        } else {
+          const errorText = await response.text();
+          console.error(`[Sitemap] Attempt ${attempt} failed:`, response.status, errorText);
+          
+          // Don't retry on 4xx errors (client errors)
+          if (response.status >= 400 && response.status < 500) {
+            break;
+          }
+          
+          // Wait before retry (exponential backoff)
+          if (attempt < 3) {
+            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+          }
+        }
+      } catch (fetchError) {
+        console.error(`[Sitemap] Attempt ${attempt} error:`, fetchError);
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        }
+      }
     }
-
-    const norms = (await response.json()) as Norm[];
-    console.log('[Sitemap] Fetched', norms.length, 'norms');
+    
+    // If all attempts failed, generate basic sitemap without norms
+    if (!fetchSuccess) {
+      console.warn('[Sitemap] All fetch attempts failed, generating basic sitemap');
+    }
 
     const now = new Date().toISOString();
 
