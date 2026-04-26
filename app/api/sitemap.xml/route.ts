@@ -1,18 +1,30 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { getCachedStatic, setCachedStatic } from '@/lib/cache';
+import { getCachedStatic, setCachedStatic } from '@/lib/cache-edge';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+export const runtime = 'edge';
+export const preferredRegion = 'auto';
 
 const CACHE_KEY = 'sitemap:xml';
+
+interface Norm {
+  id: string;
+  code: string;
+  title: string;
+  updated_at: string;
+  created_at: string;
+}
 
 /**
  * Generate dynamic sitemap.xml with all published norms
  * Updates automatically when new norms are added
  * Cached for 10 minutes for better performance
+ * Edge Runtime compatible
  */
 export async function GET() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://arquiv.org';
+
   try {
     // Check cache first
     const cached = getCachedStatic<string>(CACHE_KEY);
@@ -27,19 +39,25 @@ export async function GET() {
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://arquiv.org';
+    // Fetch norms using Supabase REST API directly (Edge compatible)
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/norms?select=id,code,title,updated_at,created_at&order=updated_at.desc`,
+      {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
-    // Fetch all norms with their updated dates
-    const { data: norms, error } = await supabase
-      .from('norms')
-      .select('id, code, title, updated_at, created_at')
-      .order('updated_at', { ascending: false });
-
-    if (error) {
-      console.error('[Sitemap] Error fetching norms:', error);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Sitemap] Error fetching norms:', errorText);
       return new NextResponse('Error generating sitemap', { status: 500 });
     }
+
+    const norms = (await response.json()) as Norm[];
 
     const now = new Date().toISOString();
 

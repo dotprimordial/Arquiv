@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 
+export const runtime = 'edge';
+export const preferredRegion = 'auto';
+
 /**
  * Generate robots.txt with sitemap reference
  * Allows all crawlers and points to dynamic sitemap
+ * Edge Runtime compatible
  */
 export async function GET() {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://arquiv.org';
