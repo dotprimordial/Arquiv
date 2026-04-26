@@ -5,6 +5,26 @@ const apiKey = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || "";
 
 const isInvalidKey = (key: string) => !key || key === "" || key === "dummy-key" || key === "MY_OPENROUTER_API_KEY";
 
+/**
+ * Simple client-side cache for data fetching
+ * TTL: 5 minutes for search results, 10 minutes for static data
+ */
+const clientCache = new Map<string, { value: unknown; expiry: number }>();
+
+function getClientCache<T>(key: string): T | undefined {
+  const entry = clientCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() > entry.expiry) {
+    clientCache.delete(key);
+    return undefined;
+  }
+  return entry.value as T;
+}
+
+function setClientCache<T>(key: string, value: T, ttlMinutes = 5): void {
+  clientCache.set(key, { value, expiry: Date.now() + ttlMinutes * 60 * 1000 });
+}
+
 export interface Norm {
   id: string;
   code: string;
@@ -39,7 +59,18 @@ export const getArchitecturalNorms = async (
   queryText?: string,
   useAi: boolean = false
 ): Promise<Norm[]> => {
+  const cacheKey = `norms:${country}:${category}:${queryText || 'all'}:${useAi}`;
+  
+  // Check cache first (5 minutes TTL for search results)
+  const cached = getClientCache<Norm[]>(cacheKey);
+  if (cached) {
+    console.log(`[Cache] Hit for norms: ${country}/${category}/${queryText || 'all'}`);
+    return cached;
+  }
+  
   console.log(`[getArchitecturalNorms] Iniciando busca: ${country}, categoria: ${category}, query: "${queryText}"`);
+
+  let results: Norm[] = [];
 
   try {
     const isSearchMode = queryText && queryText.trim() !== "";
@@ -108,10 +139,13 @@ export const getArchitecturalNorms = async (
 
     // Sem pesquisa: retornar lista leve imediatamente
     if (!isSearchMode) {
-      return data.map((n) => ({
+      results = data.map((n) => ({
         ...n,
         reasoning: n.description || `Norma ${n.code} - ${n.title}`,
       }));
+      // Cache and return
+      setClientCache(cacheKey, results, 5);
+      return results;
     }
 
     // FIX #22: If useAi=true and tener API key, try search with AI first
@@ -167,14 +201,17 @@ INSTRUÇÕES:
 
         if (aiResults.length > 0) {
           console.log(`[getArchitecturalNorms] IA retornou ${aiResults.length} resultados`);
-          return aiResults
+          results = aiResults
             .sort((a, b) => b.relevanceScore - a.relevanceScore)
-            .map((res) => {
-              const norm = data!.find((n) => n.id === res.id);
+          .map((res) => {
+            const norm = data!.find((n) => n.id === res.id);
               if (norm) return { ...norm, reasoning: res.reasoning } as Norm;
               return null;
             })
             .filter((n): n is Norm => n !== null);
+          // Cache and return
+          setClientCache(cacheKey, results, 5);
+          return results;
         }
       } catch (err) {
         console.error("[getArchitecturalNorms] IA falhou, usando busca textual:", err);
@@ -223,13 +260,17 @@ INSTRUÇÕES:
     if (scoredResults.length === 0) {
       // Se não encontrou, retornar todas as normas do país
       console.log(`[getArchitecturalNorms] DEBUG - No matches, returning all ${data.length} norms`);
-      return data.slice(0, 10).map((n) => ({
+      results = data.slice(0, 10).map((n) => ({
         ...n,
         reasoning: n.description || `Norma ${n.code} — ${n.title}`
       }));
+    } else {
+      results = scoredResults;
     }
 
-    return scoredResults;
+    // Cache and return results
+    setClientCache(cacheKey, results, 5);
+    return results;
   } catch (outerError) {
     console.error("[getArchitecturalNorms] Erro geral:", outerError);
     return [];
@@ -394,6 +435,15 @@ export const updateNorm = async (id: string, updates: Partial<Norm>) => {
 };
 
 export const getActiveCountries = async (): Promise<string[]> => {
+  const cacheKey = 'activeCountries';
+  
+  // Check cache first
+  const cached = getClientCache<string[]>(cacheKey);
+  if (cached) {
+    console.log('[Cache] Hit for activeCountries');
+    return cached;
+  }
+  
   try {
     // Get unique countries that have norms
     const { data, error } = await supabase
@@ -416,7 +466,10 @@ export const getActiveCountries = async (): Promise<string[]> => {
     });
 
     const result = Array.from(countries);
-    console.log("[getActiveCountries] Países encontrados:", result);
+    
+    // Cache for 10 minutes
+    setClientCache(cacheKey, result, 10);
+    console.log("[getActiveCountries] Países encontrados (cached):", result);
     return result;
   } catch (err) {
     console.error("Connection error fetching countries:", err);
