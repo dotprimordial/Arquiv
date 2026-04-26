@@ -25,6 +25,16 @@ export async function GET() {
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://arquiv.org';
 
+  console.log('[Sitemap] Starting generation...');
+  console.log('[Sitemap] Supabase URL present:', !!supabaseUrl);
+  console.log('[Sitemap] Supabase Key present:', !!supabaseKey);
+  console.log('[Sitemap] Base URL:', baseUrl);
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('[Sitemap] Missing environment variables');
+    return new NextResponse('Error: Missing Supabase configuration', { status: 500 });
+  }
+
   try {
     // Check cache first
     const cached = getCachedStatic<string>(CACHE_KEY);
@@ -40,24 +50,27 @@ export async function GET() {
     }
 
     // Fetch norms using Supabase REST API directly (Edge compatible)
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/norms?select=id,code,title,updated_at,created_at&order=updated_at.desc`,
-      {
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const apiUrl = `${supabaseUrl}/rest/v1/norms?select=id,code,title,updated_at,created_at&order=updated_at.desc`;
+    console.log('[Sitemap] Fetching from:', apiUrl);
+    
+    const response = await fetch(apiUrl, {
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log('[Sitemap] Response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[Sitemap] Error fetching norms:', errorText);
-      return new NextResponse('Error generating sitemap', { status: 500 });
+      return new NextResponse(`Error fetching norms: ${response.status}`, { status: 500 });
     }
 
     const norms = (await response.json()) as Norm[];
+    console.log('[Sitemap] Fetched', norms.length, 'norms');
 
     const now = new Date().toISOString();
 

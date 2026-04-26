@@ -3,6 +3,7 @@
 import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from '@/lib/supabase-server';
 import { submitNormForIndexing } from './seo-actions';
 import { getCachedSearch, setCachedSearch, generateSearchCacheKey } from '@/lib/cache';
+import { analyzeDocumentStructure, chunkDocument, generateSectionEmbeddings } from '@/lib/semantic-search';
 
 const apiKey = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || '';
 
@@ -110,6 +111,65 @@ export async function processAndUploadNorm(
     const normId = normData.id;
     console.log(`[processAndUploadNorm] ✓ Norma criada: ${normId}`);
 
+    // Step 4: Process sections and embeddings (semantic chunking)
+    let sectionsCreated = 0;
+    let embeddingsGenerated = 0;
+    
+    const contentToProcess = formData.content || '';
+    if (contentToProcess && contentToProcess.length > 100 && apiKey && apiKey.length > 10) {
+      try {
+        console.log(`[processAndUploadNorm] Starting semantic chunking...`);
+        
+        // Analyze document structure with AI
+        const sections = await analyzeDocumentStructure(contentToProcess, apiKey);
+        console.log(`[processAndUploadNorm] AI identified ${sections.length} sections`);
+        
+        // Chunk large sections
+        const chunks = chunkDocument(sections, 2000);
+        console.log(`[processAndUploadNorm] Created ${chunks.length} chunks`);
+        
+        // Generate embeddings for chunks
+        const chunksWithEmbeddings = await generateSectionEmbeddings(chunks, apiKey);
+        embeddingsGenerated = chunksWithEmbeddings.length;
+        console.log(`[processAndUploadNorm] Generated ${embeddingsGenerated} embeddings`);
+        
+        // Insert sections into database
+        for (let i = 0; i < chunksWithEmbeddings.length; i++) {
+          const chunk = chunksWithEmbeddings[i];
+          const { error: sectionError } = await supabaseWrite
+            .from('norm_sections')
+            .insert({
+              norm_id: normId,
+              section_type: chunk.sectionType,
+              section_number: chunk.sectionNumber,
+              section_title: chunk.sectionTitle,
+              content: chunk.content,
+              embedding: chunk.embedding,
+              order_index: i,
+            });
+          
+          if (sectionError) {
+            console.error(`[processAndUploadNorm] Failed to insert section ${i}:`, sectionError);
+          } else {
+            sectionsCreated++;
+          }
+        }
+        
+        // Update norm with section count
+        await supabaseWrite
+          .from('norms')
+          .update({ total_sections: sectionsCreated })
+          .eq('id', normId);
+        
+        console.log(`[processAndUploadNorm] ✓ Saved ${sectionsCreated} sections to database`);
+      } catch (chunkError) {
+        console.error('[processAndUploadNorm] Chunking failed (non-critical):', chunkError);
+        // Continue even if chunking fails - norm is already saved
+      }
+    } else {
+      console.log('[processAndUploadNorm] Skipping chunking: no content or no API key');
+    }
+
     // Submit norm for search engine indexing (non-blocking)
     console.log(`[processAndUploadNorm] Submitting for SEO indexing...`);
     submitNormForIndexing(normId, formData.code).catch((err: Error) => {
@@ -120,8 +180,8 @@ export async function processAndUploadNorm(
 
     return {
       normId,
-      sectionsCreated: 0,
-      embeddingsGenerated: 0,
+      sectionsCreated,
+      embeddingsGenerated,
     };
   } catch (error: unknown) {
     console.error('[processAndUploadNorm] === ERRO ===');
