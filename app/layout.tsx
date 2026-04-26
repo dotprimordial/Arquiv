@@ -41,9 +41,58 @@ const equinox = localFont({
   variable: '--font-equinox',
 });
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://arquiv.org';
+
 export const metadata: Metadata = {
-  title: 'Arquiv - Constuction Regulations Guide',
-  description: 'Learn and search construction norms and regulations by country.',
+  metadataBase: new URL(appUrl),
+  title: {
+    default: 'Arquiv - Normas Técnicas de Construção',
+    template: '%s | Arquiv',
+  },
+  description: 'Pesquise normas técnicas, regulamentos e legislação de construção por país. Acesso rápido a decretos, leis e regulamentos de arquitetura e engenharia.',
+  keywords: ['normas técnicas', 'regulamentos construção', 'legislação arquitetura', 'decretos', 'leis construção', 'normas país'],
+  authors: [{ name: 'Arquiv' }],
+  creator: 'Arquiv',
+  publisher: 'Arquiv',
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'pt_BR',
+    url: appUrl,
+    siteName: 'Arquiv',
+    title: 'Arquiv - Normas Técnicas de Construção',
+    description: 'Pesquise normas técnicas, regulamentos e legislação de construção por país.',
+    images: [
+      {
+        url: '/icons/icon-nopadding.png',
+        width: 512,
+        height: 512,
+        alt: 'Arquiv Logo',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Arquiv - Normas Técnicas de Construção',
+    description: 'Pesquise normas técnicas, regulamentos e legislação de construção por país.',
+    images: ['/icons/icon-nopadding.png'],
+  },
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION,
+  },
+  alternates: {
+    canonical: appUrl,
+  },
   icons: {
     icon: [
       { url: '/icons/icon-nopadding.png', sizes: '512x512', type: 'image/png' },

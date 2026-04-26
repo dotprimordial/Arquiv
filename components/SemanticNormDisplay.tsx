@@ -195,25 +195,43 @@ export default function SemanticNormDisplay({
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
+                          {/* Hierarquia da Norma */}
+                          <div className="mb-3">
+                            <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                              Norma
+                            </span>
+                            <p className="text-sm font-bold text-zinc-900">
+                              {group.normCode} - {group.normTitle}
+                            </p>
+                          </div>
+
+                          {/* Estrutura da Seção */}
+                          <div className="flex items-center gap-2 mb-3 flex-wrap">
                             <BookOpen className="w-4 h-4 text-orange-500" />
                             <span className="text-xs font-semibold text-orange-600 uppercase tracking-wide">
                               {section.sectionType}
                             </span>
                             {section.sectionNumber && (
-                              <span className="text-xs font-bold text-zinc-700">
+                              <span className="text-xs font-bold text-zinc-700 bg-zinc-200 px-2 py-0.5 rounded">
                                 {section.sectionNumber}
                               </span>
                             )}
                             {section.sectionTitle && (
-                              <span className="text-xs text-zinc-500">
+                              <span className="text-xs font-medium text-zinc-600">
                                 {section.sectionTitle}
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-zinc-700 leading-relaxed line-clamp-3">
-                            {section.content}
-                          </p>
+
+                          {/* Trecho Encontrado */}
+                          <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-lg">
+                            <p className="text-xs font-semibold text-blue-700 mb-1">
+                              Trecho encontrado:
+                            </p>
+                            <p className="text-sm text-zinc-700 leading-relaxed line-clamp-3">
+                              {section.content}
+                            </p>
+                          </div>
                         </div>
                         <button
                           onClick={() => toggleSectionExpanded(section.sectionId)}

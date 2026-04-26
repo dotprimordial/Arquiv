@@ -17,6 +17,19 @@ const nextConfig = {
       ],
     },
   },
+  // SEO: Rewrite rules for sitemap and robots
+  async rewrites() {
+    return [
+      {
+        source: '/sitemap.xml',
+        destination: '/api/sitemap.xml',
+      },
+      {
+        source: '/robots.txt',
+        destination: '/api/robots.txt',
+      },
+    ];
+  },
   // Allow access to remote image placeholder.
   images: {
     remotePatterns: [

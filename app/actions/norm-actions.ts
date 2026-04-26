@@ -1,6 +1,8 @@
 'use server';
 
 import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from '@/lib/supabase-server';
+import { submitNormForIndexing } from './seo-actions';
+import { getCachedSearch, setCachedSearch, generateSearchCacheKey } from '@/lib/cache';
 
 const apiKey = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || '';
 
@@ -108,6 +110,12 @@ export async function processAndUploadNorm(
     const normId = normData.id;
     console.log(`[processAndUploadNorm] ✓ Norma criada: ${normId}`);
 
+    // Submit norm for search engine indexing (non-blocking)
+    console.log(`[processAndUploadNorm] Submitting for SEO indexing...`);
+    submitNormForIndexing(normId, formData.code).catch((err: Error) => {
+      console.warn('[processAndUploadNorm] SEO indexing failed (non-critical):', err.message);
+    });
+
     console.log(`[processAndUploadNorm] === SUCESSO ===`);
 
     return {
@@ -179,6 +187,14 @@ export async function searchNormsSemantic(
   limit: number = 10
 ): Promise<SearchResult[]> {
   console.log('[searchNormsSemantic] Iniciando busca com IA:', { query, country, limit });
+
+  // Check cache first
+  const cacheKey = generateSearchCacheKey('semantic', query, country, undefined, limit);
+  const cached = getCachedSearch<SearchResult[]>(cacheKey);
+  if (cached) {
+    console.log('[Cache] Hit for semantic search:', cacheKey);
+    return cached;
+  }
 
   if (!apiKey || apiKey === '' || apiKey === 'MY_OPENROUTER_API_KEY') {
     console.warn('[searchNormsSemantic] API Key não configurada - busca semântica desativada');
@@ -323,7 +339,7 @@ INSTRUÇÕES:
     // If AI returns no results, fallback to textual search
     if (aiResults.length === 0) {
       console.warn('[searchNormsSemantic] IA não retornou resultados, usando fallback textual...');
-      return fallbackTextualSearch(norms, query, limit);
+      return fallbackTextualSearch(norms, query, limit, cacheKey);
     }
 
     // Map AI results to SearchResult format
@@ -352,6 +368,10 @@ INSTRUÇÕES:
       })
       .filter((r) => r !== null);
 
+    // Cache the results
+    setCachedSearch(cacheKey, results as SearchResult[]);
+    console.log('[Cache] Set semantic search results:', cacheKey);
+
     return results as SearchResult[];
   } catch (err: unknown) {
     const error = err as Error;
@@ -359,12 +379,12 @@ INSTRUÇÕES:
     
     // Fallback to textual search on any error
     console.warn('[searchNormsSemantic] Erro na IA, usando fallback textual...');
-    return fallbackTextualSearch(norms, query, limit);
+    return fallbackTextualSearch(norms, query, limit, cacheKey);
   }
 }
 
 // Fallback textual search function
-function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: string, limit: number): SearchResult[] {
+function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: string, limit: number, cacheKey?: string): SearchResult[] {
   const queryLower = cleanHtmlFormatting(query).toLowerCase();
   
   const scored = norms.map((norm) => {
@@ -384,7 +404,7 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
     return { norm, score };
   }).filter(item => item.score > 0);
   
-  return scored
+  const results: SearchResult[] = scored
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map(item => ({
@@ -402,6 +422,14 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
       regulationNumber: undefined,
       excerpt: undefined,
     }));
+  
+  // Cache the fallback results if cache key provided
+  if (cacheKey) {
+    setCachedSearch(cacheKey, results);
+    console.log('[Cache] Set fallback search results:', cacheKey);
+  }
+  
+  return results;
 }
 
 // FIX #7: deleteNormServer — Server Action para contornar RLS do cliente
