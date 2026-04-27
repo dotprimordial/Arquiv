@@ -44,8 +44,13 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
       });
       if (error) throw error;
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao fazer login com Google';
-      setError(errorMessage);
+      console.error('[SignIn Google] Error:', err);
+      
+      if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
+        setError('Erro de conexão. Verifique sua internet ou tente novamente mais tarde.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Erro ao fazer login com Google');
+      }
       setIsLoading(false);
     }
   };
@@ -72,7 +77,26 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
         setError('Sessão não iniciada. Verifique o seu email.');
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      console.error('[SignIn] Error:', err);
+      
+      // Handle specific error types
+      if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
+        setError('Erro de conexão. Verifique sua internet ou tente novamente mais tarde.');
+      } else if (err instanceof Error) {
+        // Check for common Supabase auth errors
+        const message = err.message.toLowerCase();
+        if (message.includes('invalid login credentials')) {
+          setError('Email ou palavra-passe incorretos.');
+        } else if (message.includes('email not confirmed')) {
+          setError('Por favor, confirme o seu email antes de entrar.');
+        } else if (message.includes('rate limit')) {
+          setError('Muitas tentativas. Aguarde alguns minutos.');
+        } else {
+          setError(err.message);
+        }
+      } else {
+        setError('Erro desconhecido ao fazer login.');
+      }
     } finally {
       setIsLoading(false);
     }
