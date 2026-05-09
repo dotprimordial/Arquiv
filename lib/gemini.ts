@@ -70,6 +70,11 @@ export const getArchitecturalNorms = async (
   
   console.log(`[getArchitecturalNorms] Iniciando busca: ${country}, categoria: ${category}, query: "${queryText}"`);
 
+  if (!country || country.trim() === '') {
+    console.warn('[getArchitecturalNorms] País inválido ou não informado, retornando lista vazia.');
+    return [];
+  }
+
   let results: Norm[] = [];
 
   try {
@@ -457,11 +462,12 @@ export const getActiveCountries = async (): Promise<string[]> => {
     }
 
     // Extract unique country names from joined data
+    // Note: Supabase returns joined FK data as {countries: {name: "..."}}, not an array
     const countries = new Set<string>();
     (data || []).forEach((item) => {
-      const countryData = item as { countries?: { name?: string }[] };
-      if (countryData.countries && countryData.countries[0]?.name) {
-        countries.add(countryData.countries[0].name);
+      const countryData = item as { countries?: { name?: string } };
+      if (countryData.countries?.name) {
+        countries.add(countryData.countries.name);
       }
     });
 

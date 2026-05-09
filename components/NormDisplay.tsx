@@ -20,7 +20,7 @@ interface NormDisplayProps {
   isAdmin?: boolean; // Admin pode editar/deletar qualquer norma
 }
 
-export default function NormDisplay({
+function NormDisplay({
   norms,
   isLoading,
   error,
@@ -86,11 +86,15 @@ export default function NormDisplay({
       
       {norms.map((norm, index) => (
         <motion.div
-          key={index}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.05 }}
-          className="bg-white border border-zinc-100 rounded-2xl p-6 hover:shadow-md transition-all group"
+          key={norm.id}
+          initial={{ opacity: 0, transform: 'translateY(10px)' }}
+          animate={{ opacity: 1, transform: 'translateY(0px)' }}
+          transition={{
+            delay: Math.min(index * 0.03, 0.5), // Limitar delay máximo a 0.5s para listas grandes
+            duration: 0.2,
+            ease: 'easeOut'
+          }}
+          className="bg-white border border-zinc-100 rounded-2xl p-6 hover:shadow-md transition-all group will-change-transform gpu-accelerated"
         >
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-3 flex-1">
@@ -199,3 +203,6 @@ export default function NormDisplay({
     </div>
   );
 }
+
+// Memoizar para evitar re-renders desnecessários quando as props não mudam
+export default React.memo(NormDisplay);

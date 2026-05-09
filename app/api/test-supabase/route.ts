@@ -56,10 +56,98 @@ export async function GET() {
 
     console.log('[test-supabase] Categories result:', { count: categories?.length, error: categoriesError });
 
+    console.log('[test-supabase] Testing norms table...');
+    
+    // Count total norms
+    const normsCountResponse = await fetch(
+      `${supabaseUrl}/rest/v1/norms?select=count=exact`,
+      {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    let normsCount = 0;
+    if (normsCountResponse.ok) {
+      const countHeader = normsCountResponse.headers.get('content-range');
+      if (countHeader) {
+        const parts = countHeader.split('/');
+        normsCount = parseInt(parts[1] || '0', 10);
+      }
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _normsCountError = await normsCountResponse.text();
+    }
+
+    // Get sample norms with countries
+    const normsResponse = await fetch(
+      `${supabaseUrl}/rest/v1/norms?select=id,code,title,country_id,countries(id,name)&limit=10`,
+      {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    let norms = [];
+    let normsError = null;
+    if (normsResponse.ok) {
+      norms = await normsResponse.json();
+    } else {
+      normsError = await normsResponse.text();
+    }
+
+    console.log('[test-supabase] Norms result:', { count: normsCount, sampleCount: norms?.length, error: normsError });
+
+    // Get active countries (from norms)
+    const activeCountriesResponse = await fetch(
+      `${supabaseUrl}/rest/v1/norms?select=country_id,countries(name)&limit=1000`,
+      {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    let activeCountriesData: string[] = [];
+    let activeCountriesError = null;
+    if (activeCountriesResponse.ok) {
+      const data = await activeCountriesResponse.json();
+      const countrySet = new Set<string>();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (data || []).forEach((item: any) => {
+        if (item.countries && item.countries.name) {
+          countrySet.add(item.countries.name);
+        }
+      });
+      activeCountriesData = Array.from(countrySet);
+    } else {
+      activeCountriesError = await activeCountriesResponse.text();
+    }
+
+    console.log('[test-supabase] Active countries from norms:', { count: activeCountriesData.length, countries: activeCountriesData, error: activeCountriesError });
+
     return Response.json({
       ok: true,
       countries: countries || [],
       categories: categories || [],
+      norms: {
+        totalCount: normsCount,
+        sampleCount: norms?.length,
+        samples: norms || [],
+        error: normsError,
+      },
+      activeCountries: {
+        list: activeCountriesData,
+        error: activeCountriesError,
+      },
       countriesError: countriesError,
       categoriesError: categoriesError,
     });

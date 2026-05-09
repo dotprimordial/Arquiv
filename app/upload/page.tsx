@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { extractDocumentStructure } from '@/lib/gemini';
 import { processAndUploadNorm } from '@/app/actions/norm-actions';
+import { extractTextFromPDFLimited } from '@/lib/pdf-extractor';
+import { extractTextFromDOCXLimited } from '@/lib/docx-extractor';
 import Link from 'next/link';
 import nextDynamic from 'next/dynamic';
 import 'react-quill-new/dist/quill.snow.css';
@@ -44,9 +46,10 @@ export default function UploadPage() {
   const [country, setCountry] = useState('Portugal');
   const [category, setCategory] = useState('Urbanismo');
   const [normContent, setNormContent] = useState('');
-  const [contentType, setContentType] = useState<'text' | 'pdf'>('text');
+  const [contentType, setContentType] = useState<'text' | 'pdf' | 'docx'>('text');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [docxFile, setDocxFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -99,7 +102,8 @@ export default function UploadPage() {
   const categories = [
     "Urbanismo", "Estruturas", "Segurança contra Incêndio", 
     "Acessibilidade", "Instalações Elétricas", "Instalações Hidráulicas", 
-    "Térmica e Acústica", "Materiais", "Sustentabilidade", "Apresentação/Desenho"
+    "Térmica e Acústica", "Materiais", "Sustentabilidade", "Apresentação/Desenho",
+    "Administração Municipal"
   ];
 
   const countries = [
@@ -127,8 +131,28 @@ export default function UploadPage() {
 
     setIsLoading(true);
     setError(null);
+    setIsAnalyzing(true);
 
     try {
+      // Extrair texto do PDF primeiro
+      console.log('[PDF Upload] Extraindo texto do PDF...');
+      const extractedText = await extractTextFromPDFLimited(file, 50000);
+      setNormContent(extractedText);
+      console.log(`[PDF Upload] Texto extraído: ${extractedText.length} caracteres`);
+
+      // Analisar o documento automaticamente
+      if (extractedText.length > 100) {
+        try {
+          const result = await extractDocumentStructure(extractedText, file.name.replace('.pdf', ''));
+          setAutoCategories(result.categories);
+          if (result.categories.length > 0 && category === 'Urbanismo') {
+            setCategory(result.categories[0]);
+          }
+        } catch (analyzeErr) {
+          console.warn('[PDF Upload] Análise automática falhou:', analyzeErr);
+        }
+      }
+
       const fileName = `${Date.now()}-${file.name}`;
       const countryFolder = getCountryFolder(country);
       const filePath = `${countryFolder}/${fileName}`;
@@ -184,6 +208,61 @@ export default function UploadPage() {
       setError('Erro ao fazer upload do PDF: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsLoading(false);
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleDocxUpload = async (file: File) => {
+    // Verificar se é um arquivo DOCX válido
+    const validTypes = [
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+      'application/octet-stream' // Alguns DOCX podem ter este MIME type
+    ];
+    
+    if (!validTypes.includes(file.type) && !file.name.endsWith('.docx') && !file.name.endsWith('.doc')) {
+      setError('Por favor, selecione um arquivo Word (.docx ou .doc) válido.');
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) { // 50MB limit
+      setError('O arquivo Word é muito grande. O limite é de 50MB.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setIsAnalyzing(true);
+
+    try {
+      // Extrair texto do DOCX (aumentado para 500k caracteres ~ 100-150 páginas)
+      console.log('[DOCX Upload] Extraindo texto do documento...');
+      const extractedText = await extractTextFromDOCXLimited(file, 500000, true);
+      setNormContent(extractedText);
+      setDocxFile(file);
+      console.log(`[DOCX Upload] Texto extraído: ${extractedText.length} caracteres`);
+
+      // Analisar o documento automaticamente
+      if (extractedText.length > 100) {
+        try {
+          // Remover tags HTML para análise
+          const plainText = extractedText.replace(/<[^>]*>/g, '');
+          const result = await extractDocumentStructure(plainText, file.name.replace(/\.(docx|doc)$/i, ''));
+          setAutoCategories(result.categories);
+          if (result.categories.length > 0 && category === 'Urbanismo') {
+            setCategory(result.categories[0]);
+          }
+        } catch (analyzeErr) {
+          console.warn('[DOCX Upload] Análise automática falhou:', analyzeErr);
+        }
+      }
+
+      toast.success('Documento Word carregado com sucesso!');
+    } catch (err: unknown) {
+      setError('Erro ao processar o arquivo Word: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setIsLoading(false);
+      setIsAnalyzing(false);
     }
   };
 
@@ -200,6 +279,11 @@ export default function UploadPage() {
       return;
     }
 
+    if (contentType === 'docx' && !docxFile) {
+      setError('Por favor, faça upload do arquivo Word.');
+      return;
+    }
+
     if (contentType === 'text' && normContent.length > MAX_CONTENT_LENGTH) {
       setError(`O conteúdo é demasiado longo. O limite é de ${MAX_CONTENT_LENGTH / 1024 / 1024} MB de texto.`);
       return;
@@ -207,6 +291,17 @@ export default function UploadPage() {
 
     setIsLoading(true);
     setError(null);
+
+    // Analisar documento automaticamente antes do upload (se ainda não foi analisado)
+    if (contentType === 'text' && normContent.length > 100 && autoCategories.length === 0 && !isAnalyzing) {
+      try {
+        console.log('[Upload] Iniciando análise automática do documento...');
+        await analyzeDocument(normContent.replace(/<(.|\n)*?>/g, ''), normName);
+      } catch (analyzeErr) {
+        console.warn('[Upload] Análise automática falhou, continuando sem:', analyzeErr);
+        // Continua mesmo se a análise falhar
+      }
+    }
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -222,8 +317,8 @@ export default function UploadPage() {
         title: normName,
         country,
         category: finalCategory,
-        fileType: contentType,
-        fileUrl: pdfUrl,
+        fileType: contentType === 'docx' ? 'pdf' : contentType, // DOCX converte para texto, salva como tipo texto
+        fileUrl: contentType === 'pdf' ? pdfUrl : null,
         content: normContent,
         uploadedBy: user.id,
         userEmail: user.email,
@@ -243,15 +338,82 @@ export default function UploadPage() {
   };
 
   const modules = useMemo(() => ({
-    toolbar: [
-      [{ 'header': [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-      [{ 'align': [] }],
-      [{ 'color': [] }, { 'background': [] }],
-      ['clean']
-    ],
+    toolbar: {
+      container: [
+        // Fonte e tamanho
+        [{ 'font': ['sans-serif', 'serif', 'monospace'] }, { 'size': ['small', false, 'large', 'huge'] }],
+        // Cabeçalhos
+        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+        // Formatação básica
+        ['bold', 'italic', 'underline', 'strike', { 'script': 'sub' }, { 'script': 'super' }],
+        // Cores
+        [{ 'color': [] }, { 'background': [] }],
+        // Alinhamento
+        [{ 'align': [] }],
+        // Listas e indentação
+        [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'list': 'check' }],
+        [{ 'indent': '-1' }, { 'indent': '+1' }],
+        // Elementos extras
+        ['blockquote', 'code-block'],
+        // Links, imagens, vídeos
+        ['link', 'image', 'video'],
+        // Utilitários
+        ['clean', 'undo', 'redo']
+      ],
+      handlers: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        undo: function(this: { quill: { history: { undo: () => void } } }) {
+          this.quill.history.undo();
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        redo: function(this: { quill: { history: { redo: () => void } } }) {
+          this.quill.history.redo();
+        }
+      }
+    },
+    // Preservar formatação ao colar
+    clipboard: {
+      matchVisual: true,
+      preserveWhitespace: true,
+      matchers: [
+        // Preservar quebras de linha
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ['BR', function(_node: unknown, delta: { insert: (text: string) => unknown }) {
+          return delta.insert('\n');
+        }]
+      ]
+    },
+    // Histórico para undo/redo
+    history: {
+      delay: 1000,
+      maxStack: 500,
+      userOnly: true
+    },
+    // Keyboard shortcuts
+    keyboard: {
+      bindings: {
+        tab: {
+          key: 9,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          handler: function() {
+            return true;
+          }
+        }
+      }
+    }
   }), []);
+
+  const formats = [
+    'font', 'size',
+    'header',
+    'bold', 'italic', 'underline', 'strike', 'script',
+    'color', 'background',
+    'align',
+    'list', 'bullet', 'check', 'indent',
+    'blockquote', 'code-block',
+    'link', 'image', 'video',
+    'clean'
+  ];
 
   if (isCheckingAuth) {
     return (
@@ -263,7 +425,8 @@ export default function UploadPage() {
 
   const isButtonDisabled = isLoading || 
     (contentType === 'text' && !normContent.replace(/<(.|\n)*?>/g, '').trim()) ||
-    (contentType === 'pdf' && !pdfUrl);
+    (contentType === 'pdf' && !pdfUrl) ||
+    (contentType === 'docx' && !docxFile);
 
   return (
     <div className="min-h-screen bg-[#F9F9F8] text-zinc-900 selection:bg-zinc-900 selection:text-white pb-20">
@@ -369,6 +532,19 @@ export default function UploadPage() {
                     <span className="hidden xs:inline">PDF</span>
                     <span className="inline xs:hidden">PDF</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setContentType('docx')}
+                    className={`flex-1 py-3 px-3 xs:px-4 rounded-xl border-2 transition-all font-medium text-xs xs:text-sm ${
+                      contentType === 'docx'
+                        ? 'border-zinc-900 bg-zinc-900 text-white'
+                        : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300'
+                    }`}
+                  >
+                    <FileText className="w-4 h-4 inline mr-1 xs:mr-2" />
+                    <span className="hidden xs:inline">DOCX</span>
+                    <span className="inline xs:hidden">DOC</span>
+                  </button>
                 </div>
               </div>
 
@@ -383,6 +559,7 @@ export default function UploadPage() {
                       value={normContent}
                       onChange={setNormContent}
                       modules={modules}
+                      formats={formats}
                       placeholder="Cole ou digite aqui o texto completo da norma com formatação..."
                       className="bg-zinc-50 rounded-3xl overflow-hidden border border-zinc-100"
                     />
@@ -391,15 +568,6 @@ export default function UploadPage() {
                     <div className="text-xs text-zinc-400 font-medium">
                       {normContent.replace(/<(.|\n)*?>/g, '').length.toLocaleString()} caracteres (sem formatação)
                     </div>
-                    {normContent.length > 100 && !isAnalyzing && (
-                      <button
-                        type="button"
-                        onClick={() => analyzeDocument(normContent.replace(/<(.|\n)*?>/g, ''), normName)}
-                        className="text-xs bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition-colors"
-                      >
-                        🧠 Analisar Documento
-                      </button>
-                    )}
                     {isAnalyzing && (
                       <div className="text-xs text-blue-600 font-medium flex items-center gap-1">
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -472,6 +640,78 @@ export default function UploadPage() {
                       )}
                     </label>
                   </div>
+                </div>
+              )}
+
+              {contentType === 'docx' && (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-zinc-400 ml-1">
+                    Arquivo Word (DOCX/DOC)
+                  </label>
+                  <div className="border-2 border-dashed border-zinc-300 rounded-2xl p-8 text-center hover:border-zinc-400 transition-colors">
+                    <input
+                      type="file"
+                      accept=".docx,.doc"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleDocxUpload(file);
+                      }}
+                      className="hidden"
+                      id="docx-upload"
+                    />
+                    <label
+                      htmlFor="docx-upload"
+                      className="cursor-pointer flex flex-col items-center gap-4"
+                    >
+                      {docxFile ? (
+                        <>
+                          <FileText className="w-12 h-12 text-emerald-600" />
+                          <div>
+                            <p className="font-medium text-zinc-900">{docxFile.name}</p>
+                            <p className="text-sm text-zinc-500">
+                              {(docxFile.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                          <p className="text-sm text-emerald-600 font-medium">
+                            ✓ Documento convertido para texto
+                          </p>
+                          {normContent && (
+                            <p className="text-xs text-zinc-500">
+                              {normContent.replace(/<[^>]*>/g, '').length.toLocaleString()} caracteres extraídos
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-12 h-12 text-zinc-400" />
+                          <div>
+                            <p className="font-medium text-zinc-900">
+                              Clique para fazer upload do Word
+                            </p>
+                            <p className="text-sm text-zinc-500">
+                              Será convertido automaticamente para texto
+                            </p>
+                          </div>
+                          <p className="text-xs text-zinc-400">
+                              .docx ou .doc • Máximo 50MB
+                            </p>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                  
+                  {/* Show extracted content preview for DOCX */}
+                  {docxFile && normContent && (
+                    <div className="mt-4 p-4 bg-zinc-50 rounded-xl border border-zinc-100">
+                      <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">
+                        Visualização do conteúdo extraído:
+                      </p>
+                      <div 
+                        className="text-sm text-zinc-700 max-h-32 overflow-y-auto prose prose-sm"
+                        dangerouslySetInnerHTML={{ __html: normContent.substring(0, 500) + (normContent.length > 500 ? '...' : '') }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -89,7 +89,8 @@ INSERT INTO categories (name, description) VALUES
     ('Térmica e Acústica', 'Isolamento térmico e acústico'),
     ('Materiais', 'Especificações de materiais de construção'),
     ('Sustentabilidade', 'Normas de sustentabilidade'),
-    ('Apresentação/Desenho', 'Normas de desenho e apresentação')
+    ('Apresentação/Desenho', 'Normas de desenho e apresentação'),
+    ('Administração Municipal', 'Normas de administração e gestão municipal')
 ON CONFLICT (name) DO NOTHING;
 
 -- Insert any additional categories from existing norms data

@@ -79,12 +79,16 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
     } catch (err: unknown) {
       console.error('[SignIn] Error:', err);
       
+      // Get error name and message
+      const errorName = err instanceof Error ? err.name : '';
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      
       // Handle specific error types
-      if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
-        setError('Erro de conexão. Verifique sua internet ou tente novamente mais tarde.');
+      if (errorName === 'AuthRetryableFetchError' || errorMessage.includes('Failed to fetch')) {
+        setError('Erro de conexão com o servidor. Verifique:\n1. Sua conexão de internet\n2. Se o projeto Supabase está ativo\n3. As configurações em .env.local');
       } else if (err instanceof Error) {
         // Check for common Supabase auth errors
-        const message = err.message.toLowerCase();
+        const message = errorMessage.toLowerCase();
         if (message.includes('invalid login credentials')) {
           setError('Email ou palavra-passe incorretos.');
         } else if (message.includes('email not confirmed')) {
@@ -92,7 +96,7 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
         } else if (message.includes('rate limit')) {
           setError('Muitas tentativas. Aguarde alguns minutos.');
         } else {
-          setError(err.message);
+          setError(errorMessage);
         }
       } else {
         setError('Erro desconhecido ao fazer login.');

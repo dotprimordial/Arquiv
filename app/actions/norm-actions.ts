@@ -59,24 +59,44 @@ export async function processAndUploadNorm(
     const countryId = countryData[0].id;
     console.log(`[processAndUploadNorm] ✓ País encontrado: ${countryId}`);
 
-    // Step 2: Resolve category name to ID
+    // Step 2: Resolve category name to ID (auto-create if missing)
     console.log(`[processAndUploadNorm] Resolvendo categoria: "${formData.category}"`);
+    const categoryName = formData.category.trim();
     const { data: categoryData, error: categoryError } = await supabase
       .from('categories')
       .select('id')
-      .eq('name', formData.category.trim());
+      .eq('name', categoryName);
 
     if (categoryError) {
       console.error('[processAndUploadNorm] Erro ao buscar categoria:', categoryError);
       throw new Error(`Erro ao buscar categoria: ${categoryError.message}`);
     }
 
+    let categoryId: string;
+    
     if (!categoryData || categoryData.length === 0) {
-      throw new Error(`Categoria "${formData.category}" não encontrada no banco de dados`);
-    }
+      console.log(`[processAndUploadNorm] Categoria não encontrada, criando: "${categoryName}"`);
+      // Auto-create the missing category
+      const { data: newCategory, error: createError } = await supabaseWrite
+        .from('categories')
+        .insert({
+          name: categoryName,
+          description: `Categoria: ${categoryName}`,
+        })
+        .select('id')
+        .single();
 
-    const categoryId = categoryData[0].id;
-    console.log(`[processAndUploadNorm] ✓ Categoria encontrada: ${categoryId}`);
+      if (createError || !newCategory) {
+        console.error('[processAndUploadNorm] Erro ao criar categoria:', createError);
+        throw new Error(`Erro ao criar categoria "${categoryName}": ${createError?.message || 'Desconhecido'}`);
+      }
+
+      categoryId = (newCategory as { id?: string }).id || '';
+      console.log(`[processAndUploadNorm] ✓ Categoria criada: ${categoryId}`);
+    } else {
+      categoryId = categoryData[0].id;
+      console.log(`[processAndUploadNorm] ✓ Categoria encontrada: ${categoryId}`);
+    }
 
     // Step 3: Insert norm
     console.log('[processAndUploadNorm] Inserindo norma...');
@@ -217,6 +237,11 @@ export interface SearchResult {
   decree?: string;
   regulationNumber?: string;
   excerpt?: string;
+  // Estrutura hierárquica do trecho
+  chapter?: string;
+  article?: string;
+  paragraph?: string;
+  section?: string;
 }
 
 export interface GroupedSearchResult {
@@ -267,7 +292,7 @@ export async function searchNormsSemantic(
     const { supabase } = await import('@/lib/supabase');
     console.log('[searchNormsSemantic] Buscando todas as normas para análise...');
     
-    // Fetch all norms
+    // Fetch all norms with country name via join
     const queryBuilder = supabase
       .from('norms')
       .select(`
@@ -276,8 +301,8 @@ export async function searchNormsSemantic(
         title,
         description,
         content,
-        country,
-        keywords
+        keywords,
+        countries(name)
       `);
 
     // Apply country filter if provided
@@ -307,13 +332,13 @@ export async function searchNormsSemantic(
       return [];
     }
 
-    // Prepare data for AI analysis (clean HTML formatting)
+    // Prepare data for AI analysis - include more content for better section extraction
     const normsForAI = norms.map((norm) => ({
       id: norm.id,
       code: cleanHtmlFormatting(String(norm.code || "")),
       title: cleanHtmlFormatting(String(norm.title || "")),
       description: cleanHtmlFormatting(String(norm.description || "")).substring(0, 500),
-      content: cleanHtmlFormatting(String(norm.content || "")).substring(0, 1000),
+      content: cleanHtmlFormatting(String(norm.content || "")).substring(0, 10000), // Aumentado para 10000 chars
       keywords: (norm.keywords as string[]) || [],
     }));
 
@@ -331,15 +356,35 @@ Consulta: "${cleanedQuery}" | País: ${country || 'Todos'}
 Normas disponíveis (${normsForAI.length}):
 ${JSON.stringify(normsForAI, null, 2)}
 
-INSTRUÇÕES:
-1. Analise a consulta e determine quais normas são relevantes
-2. Para cada norma relevante, extraia:
-   - Decreto/Lei (se mencionado no código ou título)
-   - Número do regulamento (se mencionado)
-   - Trechos relevantes do conteúdo que respondem à consulta
-3. Use APENAS os dados fornecidos
-4. NUNCA invente informações
-5. Retorne APENAS JSON válido: [{"id": "uuid", "reasoning": "explicação", "relevanceScore": 0.95, "decree": "Decreto-Lei n.º X/2024", "regulationNumber": "número", "excerpt": "trecho relevante do conteúdo"}]`,
+INSTRUÇÕES CRÍTICAS:
+1. Analise a consulta e encontre APENAS os trechos específicos que respondem diretamente à pergunta
+2. NUNCA retorne o documento completo - extraia SOMENTE a parte relevante (300-500 caracteres)
+3. Se o texto estiver mal formatado, identifique padrões como:
+   - Números seguidos de texto (ex: "1. Altura máxima...", "Art. 5º Altura...")
+   - Palavras em maiúsculas no início (ex: "CAPÍTULO I", "SEÇÃO 2")
+   - Quebras de linha duplas que separam seções
+   - Palavras-chave como "Artigo", "Parágrafo", "Inciso", "Alínea"
+4. Extraia a estrutura hierárquica quando possível:
+   - chapter: nome do capítulo/seção maior (se identificável)
+   - article: número do artigo/disposição específica
+   - paragraph: parágrafo/inciso específico dentro do artigo
+5. O trecho (excerpt) deve ser CONCISO e DIRETO - inclua apenas:
+   - A regra/norma específica que responde à pergunta
+   - Contexto mínimo necessário para entender (1-2 frases antes e depois)
+   - MÁXIMO 500 caracteres por trecho
+6. Se uma norma tiver múltiplos trechos relevantes, retorne cada um como item separado no array
+7. Use APENAS dados fornecidos - NUNCA invente informações
+8. Retorne APENAS JSON válido:
+[{
+  "id": "uuid da norma",
+  "reasoning": "por que este trecho responde à consulta",
+  "relevanceScore": 0.95,
+  "decree": "identificação da norma",
+  "chapter": "Capítulo/Seção identificada ou null",
+  "article": "Artigo/Disposição específica ou null",
+  "paragraph": "Parágrafo/Inciso específico ou null",
+  "excerpt": "TRECHO ESPECÍFICO E CONCISO (300-500 caracteres) que responde diretamente à consulta"
+}]`,
       },
     ];
 
@@ -385,6 +430,10 @@ INSTRUÇÕES:
       decree?: string;
       regulationNumber?: string;
       excerpt?: string;
+      chapter?: string;
+      article?: string;
+      paragraph?: string;
+      section?: string;
     }>;
     try {
       const parsed = JSON.parse(cleanedText);
@@ -403,27 +452,39 @@ INSTRUÇÕES:
     }
 
     // Map AI results to SearchResult format
+    // Use index to create unique sectionId for multiple excerpts from same norm
     const results = aiResults
       .sort((a, b) => b.relevanceScore - a.relevanceScore)
       .slice(0, limit)
-      .map((aiResult) => {
+      .map((aiResult, index) => {
         const norm = norms.find((n) => n.id === aiResult.id);
         if (!norm) return null;
         
+        // Extract country name from joined countries data (Supabase returns {countries: {name: "..."}})
+        const countryData = norm.countries as { name?: string } | undefined;
+        const countryName = countryData?.name || '';
+        
+        // Create unique sectionId using index to handle multiple excerpts from same norm
+        const uniqueSectionId = `${String(norm.id)}-${index}`;
+        
         return {
-          sectionId: String(norm.id),
+          sectionId: uniqueSectionId,
           normId: String(norm.id),
           normCode: (norm.code as string) || '',
           normTitle: (norm.title as string) || '',
-          normCountry: (norm.country as string) || '',
-          sectionType: 'norma',
-          sectionNumber: null,
-          sectionTitle: null,
-          content: ((norm.content as string) || '') + ' ' + ((norm.description as string) || ''),
+          normCountry: countryName,
+          sectionType: aiResult.article ? 'artigo' : (aiResult.chapter ? 'capitulo' : 'norma'),
+          sectionNumber: aiResult.article || aiResult.paragraph || null,
+          sectionTitle: aiResult.chapter || null,
+          content: aiResult.excerpt || ((norm.content as string) || '') + ' ' + ((norm.description as string) || ''),
           similarity: aiResult.relevanceScore,
           decree: aiResult.decree,
           regulationNumber: aiResult.regulationNumber,
           excerpt: aiResult.excerpt,
+          chapter: aiResult.chapter,
+          article: aiResult.article,
+          paragraph: aiResult.paragraph,
+          section: aiResult.section,
         };
       })
       .filter((r) => r !== null);
@@ -467,21 +528,27 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
   const results: SearchResult[] = scored
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
-    .map(item => ({
-      sectionId: String(item.norm.id),
-      normId: String(item.norm.id),
-      normCode: (item.norm.code as string) || '',
-      normTitle: (item.norm.title as string) || '',
-      normCountry: (item.norm.country as string) || '',
-      sectionType: 'norma',
-      sectionNumber: null,
-      sectionTitle: null,
-      content: cleanHtmlFormatting(((item.norm.content as string) || '') + ' ' + ((item.norm.description as string) || '')),
-      similarity: item.score / 10,
-      decree: undefined,
-      regulationNumber: undefined,
-      excerpt: undefined,
-    }));
+    .map(item => {
+      // Extract country name from joined countries data
+      const countryData = item.norm.countries as { name?: string } | undefined;
+      const countryName = countryData?.name || '';
+      
+      return {
+        sectionId: String(item.norm.id),
+        normId: String(item.norm.id),
+        normCode: (item.norm.code as string) || '',
+        normTitle: (item.norm.title as string) || '',
+        normCountry: countryName,
+        sectionType: 'norma',
+        sectionNumber: null,
+        sectionTitle: null,
+        content: cleanHtmlFormatting(((item.norm.content as string) || '') + ' ' + ((item.norm.description as string) || '')),
+        similarity: item.score / 10,
+        decree: undefined,
+        regulationNumber: undefined,
+        excerpt: undefined,
+      };
+    });
   
   // Cache the fallback results if cache key provided
   if (cacheKey) {

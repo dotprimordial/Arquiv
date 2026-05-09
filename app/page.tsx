@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { LogIn, LogOut, Upload as UploadIcon, User, ShieldCheck } from 'lucide-react';
-import CountrySelector, { Country } from '@/components/CountrySelector';
+import Image from 'next/image';
+import CountrySelector, { Country, countries } from '@/components/CountrySelector';
 import NormSearch from '@/components/NormSearch';
 import NormDisplay from '@/components/NormDisplay';
 import { getArchitecturalNorms, Norm, updateNorm, getActiveCountries } from '@/lib/gemini';
@@ -33,7 +34,7 @@ interface SupabaseUser {
 }
 
 export default function Home() {
-  const [selectedCountry, setSelectedCountry] = useState<Country>({ code: 'PT', name: 'Portugal' });
+  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAiSearchEnabled, setIsAiSearchEnabled] = useState(true); // Toggle busca IA
@@ -57,12 +58,31 @@ export default function Home() {
   // FIX #14: fetchActiveCountries sem dependência circular
   const fetchActiveCountries = useCallback(async () => {
     const activeNames = await getActiveCountries();
+    console.log('[Home] fetchActiveCountries retornou:', activeNames);
     setActiveCountryNames(activeNames);
   }, []); // sem dependências — não causa loops
 
   useEffect(() => {
+    console.log('[Home] Inicial: buscando países ativos...');
     fetchActiveCountries();
   }, [fetchActiveCountries]);
+
+  useEffect(() => {
+    console.log('[Home] activeCountryNames mudou:', activeCountryNames);
+    if (activeCountryNames.length === 0) {
+      console.log('[Home] Nenhum país ativo encontrado, não selecionando país.');
+      return;
+    }
+
+    if (!selectedCountry || !activeCountryNames.includes(selectedCountry.name)) {
+      const defaultCountryName = activeCountryNames[0];
+      const defaultCountry = countries.find((c) => c.name === defaultCountryName);
+      console.log(`[Home] Selecionando país padrão: ${defaultCountryName}`);
+      if (defaultCountry) {
+        setSelectedCountry(defaultCountry);
+      }
+    }
+  }, [activeCountryNames, selectedCountry]);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -105,6 +125,13 @@ export default function Home() {
   }, []);
 
   const fetchNorms = useCallback(async (country: string, category: string, query: string, useAi: boolean = false) => {
+    if (!country || country.trim() === '') {
+      console.warn('[fetchNorms] País inválido ou não selecionado, cancelando busca.');
+      setNorms(null);
+      setSemanticResults(null);
+      return;
+    }
+
     // FIX #15: Guard contra fetches paralelos e duplicados
     const requestKey = `${country}-${category}-${query}-${useAi}`;
     if (lastRequestKeyRef.current === requestKey && isFetchingRef.current) {
@@ -159,11 +186,22 @@ export default function Home() {
 
   // FIX #17: Separar useEffect por responsabilidade — país/categoria vs query
   useEffect(() => {
+    console.log('[Home] useEffect triggered - country:', selectedCountry?.name, 'category:', selectedCategory, 'aiSearch:', isAiSearchEnabled);
+    if (!selectedCountry?.name) {
+      console.log('[Home] selectedCountry ainda não definido, pulando busca.');
+      return;
+    }
+    console.log('[Home] Disparando fetchNorms com país:', selectedCountry.name);
     fetchNorms(selectedCountry.name, selectedCategory, searchQuery, isAiSearchEnabled);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCountry.name, selectedCategory, isAiSearchEnabled]); // Incluir isAiSearchEnabled
+  }, [selectedCountry?.name, selectedCategory, isAiSearchEnabled]); // Incluir isAiSearchEnabled
 
   const handleSearch = useCallback((query: string) => {
+    if (!selectedCountry?.name) {
+      console.warn('[handleSearch] Nenhum país selecionado, busca não será executada.');
+      return;
+    }
+
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
@@ -172,9 +210,10 @@ export default function Home() {
 
     // FIX #18: Debounce aumentado para 500ms para evitar chamadas excessivas
     debounceTimerRef.current = setTimeout(() => {
+      if (!selectedCountry?.name) return;
       fetchNorms(selectedCountry.name, selectedCategory, query, isAiSearchEnabled);
     }, 500);
-  }, [selectedCountry.name, selectedCategory, fetchNorms, isAiSearchEnabled]);
+  }, [selectedCountry?.name, selectedCategory, fetchNorms, isAiSearchEnabled]);
 
   // FIX #7: Usar Server Action deleteNormServer em vez de cliente direto
   const handleDeleteNorm = async (id: string) => {
@@ -246,10 +285,13 @@ export default function Home() {
                 <div className="flex items-center gap-3 p-2 bg-zinc-50 rounded-full">
                   <div className="w-8 h-8 bg-zinc-900 rounded-full flex items-center justify-center">
                     {user.user_metadata?.avatar_url ? (
-                      <img
+                      <Image
                         src={user.user_metadata.avatar_url}
                         alt="Avatar"
+                        width={32}
+                        height={32}
                         className="w-8 h-8 rounded-full object-cover"
+                        unoptimized
                       />
                     ) : (
                       <User className="w-4 h-4 text-zinc-500" />
@@ -303,7 +345,7 @@ export default function Home() {
       {/* Country Selection */}
       <div className="mb-12">
         <CountrySelector
-          selectedCountryName={selectedCountry.name}
+          selectedCountryName={selectedCountry?.name || ''}
           onSelect={setSelectedCountry}
           activeCountryNames={activeCountryNames}
         />
@@ -359,14 +401,14 @@ export default function Home() {
       </div>
 
       {/* Results */}
-      {searchQuery.trim() !== '' ? (
+      {searchQuery.trim() !== '' && isAiSearchEnabled ? (
         <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin"></div></div>}>
           <SemanticNormDisplay
             results={semanticResults}
             isLoading={isLoading}
             error={error}
-            countryName={selectedCountry.name}
-            countryCode={selectedCountry.code}
+            countryName={selectedCountry?.name || ''}
+            countryCode={selectedCountry?.code || ''}
             hasSearchQuery={searchQuery.trim() !== ''}
           />
         </Suspense>
@@ -376,8 +418,8 @@ export default function Home() {
             norms={norms}
             isLoading={isLoading}
             error={error}
-            countryName={selectedCountry.name}
-            countryCode={selectedCountry.code}
+            countryName={selectedCountry?.name || ''}
+            countryCode={selectedCountry?.code || ''}
             onDelete={handleDeleteNorm}
             onUpdate={handleUpdateNorm}
             hasSearchQuery={searchQuery.trim() !== ''}

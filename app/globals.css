@@ -1,6 +1,20 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Performance: Optimize animations - GPU acceleration hints */
+@layer utilities {
+  .will-change-transform {
+    will-change: transform;
+  }
+  .will-change-opacity {
+    will-change: opacity;
+  }
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+}
+
 @theme {
   --font-sans: var(--font-sans);
   --font-display: var(--font-display);
@@ -36,6 +50,98 @@
 .rich-text-editor .ql-editor {
   @apply px-6 py-4 leading-relaxed;
 }
+.rich-text-editor .ql-editor p {
+  @apply mb-3;
+}
+.rich-text-editor .ql-editor h1 {
+  @apply text-3xl font-bold mb-4 mt-2;
+}
+.rich-text-editor .ql-editor h2 {
+  @apply text-2xl font-bold mb-3 mt-4;
+}
+.rich-text-editor .ql-editor h3 {
+  @apply text-xl font-bold mb-2 mt-3;
+}
+.rich-text-editor .ql-editor blockquote {
+  @apply border-l-4 border-zinc-300 pl-4 italic text-zinc-600 my-3;
+}
+.rich-text-editor .ql-editor code {
+  @apply bg-zinc-100 px-1 py-0.5 rounded text-sm font-mono;
+}
+.rich-text-editor .ql-editor pre {
+  @apply bg-zinc-100 p-3 rounded-lg my-3 overflow-x-auto;
+}
+
+/* Enhanced Toolbar Styles */
 .rich-text-editor .ql-toolbar {
-  @apply border-b border-zinc-100 bg-zinc-50/50 px-4 py-2;
+  @apply border-b border-zinc-100 bg-zinc-50/50 px-3 py-2 sticky top-0 z-10;
+}
+.rich-text-editor .ql-toolbar button {
+  @apply w-8 h-8 flex items-center justify-center rounded hover:bg-zinc-200 transition-colors;
+}
+.rich-text-editor .ql-toolbar .ql-formats {
+  @apply flex items-center gap-1 mr-2;
+}
+.rich-text-editor .ql-toolbar .ql-picker {
+  @apply h-8;
+}
+.rich-text-editor .ql-toolbar .ql-picker-label {
+  @apply flex items-center px-2 py-1 rounded hover:bg-zinc-200 transition-colors;
+}
+.rich-text-editor .ql-toolbar .ql-stroke {
+  @apply stroke-zinc-600;
+}
+.rich-text-editor .ql-toolbar .ql-fill {
+  @apply fill-zinc-600;
+}
+.rich-text-editor .ql-toolbar button:hover .ql-stroke,
+.rich-text-editor .ql-toolbar button.ql-active .ql-stroke {
+  @apply stroke-zinc-900;
+}
+.rich-text-editor .ql-toolbar button:hover .ql-fill,
+.rich-text-editor .ql-toolbar button.ql-active .ql-fill {
+  @apply fill-zinc-900;
+}
+
+/* Color picker enhancement */
+.rich-text-editor .ql-color-picker .ql-picker-options {
+  @apply bg-white border border-zinc-200 rounded-lg shadow-lg p-2;
+}
+.rich-text-editor .ql-color-picker .ql-picker-item {
+  @apply w-5 h-5 rounded-full m-1 hover:scale-110 transition-transform;
+}
+
+/* Font and size pickers */
+.rich-text-editor .ql-font .ql-picker-label,
+.rich-text-editor .ql-size .ql-picker-label {
+  @apply text-sm font-medium;
+}
+.rich-text-editor .ql-font .ql-picker-options,
+.rich-text-editor .ql-size .ql-picker-options {
+  @apply bg-white border border-zinc-200 rounded-lg shadow-lg;
+}
+.rich-text-editor .ql-font .ql-picker-item,
+.rich-text-editor .ql-size .ql-picker-item {
+  @apply px-3 py-1.5 hover:bg-zinc-100 cursor-pointer;
+}
+
+/* Undo/Redo buttons custom style */
+.rich-text-editor .ql-undo::before {
+  content: '↶';
+  font-size: 16px;
+  font-weight: bold;
+}
+.rich-text-editor .ql-redo::before {
+  content: '↷';
+  font-size: 16px;
+  font-weight: bold;
+}
+
+/* Tooltip for toolbar buttons */
+.rich-text-editor .ql-toolbar button {
+  @apply relative;
+}
+.rich-text-editor .ql-toolbar button[title]:hover::after {
+  content: attr(title);
+  @apply absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-zinc-800 text-white text-xs rounded whitespace-nowrap z-50;
 }
