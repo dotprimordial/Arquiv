@@ -23,6 +23,8 @@ const CATEGORIES = [
   "Térmica e Acústica", "Materiais", "Sustentabilidade", "Apresentação/Desenho"
 ] as const;
 
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'seantomasytbr@gmail.com';
+
 interface SupabaseUser {
   id: string;
   email?: string;
@@ -90,7 +92,7 @@ export default function Home() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           setUser(session.user);
-          setIsAdmin(session.user.email === 'seantomasytbr@gmail.com');
+          setIsAdmin(session.user.email === ADMIN_EMAIL);
         }
       } catch (err) {
         console.error('Session check error:', err);
@@ -108,7 +110,7 @@ export default function Home() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         setUser(session.user);
-        setIsAdmin(session.user.email === 'seantomasytbr@gmail.com');
+        setIsAdmin(session.user.email === ADMIN_EMAIL);
         setIsAuthModalOpen(false);
       } else {
         setUser(null);

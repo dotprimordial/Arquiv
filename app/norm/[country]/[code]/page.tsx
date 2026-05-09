@@ -1,7 +1,4 @@
 'use client';
-
-export const runtime = 'edge';
-
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -63,13 +60,23 @@ export default function NormDetailPage() {
     const checkIfOfficial = async () => {
       try {
         const { supabase } = await import('@/lib/supabase');
+        // Query by code and ensure country match via join if possible
         const { data } = await supabase
           .from('norms')
-          .select('id')
-          .eq('country', country)
+          .select('id, countries(name)')
           .eq('code', code)
           .maybeSingle();
-        setIsAIGenerated(!data);
+
+        // If a record exists and countries match, it's official
+        if (data && data.id) {
+          // if countries name is present, compare it
+          const countryName = (data as any).countries?.[0]?.name || (data as any).countries?.name;
+          if (!countryName || countryName === country) {
+            setIsAIGenerated(false);
+            return;
+          }
+        }
+        setIsAIGenerated(true);
       } catch {
         // silencioso
       }

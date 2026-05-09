@@ -97,7 +97,7 @@ Responda APENAS em JSON válido no formato:
   try {
     const response = await openRouter.chatCompletion(
       messages,
-      'anthropic/claude-3-haiku',
+      'google/gemma-4-31b-it:free',
       0.1,
       { type: 'json_object' }
     );

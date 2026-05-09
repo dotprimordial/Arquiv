@@ -8,19 +8,25 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { extractDocumentStructure } from '@/lib/gemini';
 import { processAndUploadNorm } from '@/app/actions/norm-actions';
-import { extractTextFromPDFLimited } from '@/lib/pdf-extractor';
-import { extractTextFromDOCXLimited } from '@/lib/docx-extractor';
 import Link from 'next/link';
 import nextDynamic from 'next/dynamic';
-import 'react-quill-new/dist/quill.snow.css';
 
 // Import ReactQuill dynamically to avoid SSR issues
-const ReactQuill = nextDynamic(() => import('react-quill-new'), { ssr: false });
+const ReactQuill = nextDynamic(
+  () => import('react-quill-new').then((mod) => {
+    // Dynamically import CSS only on client side
+    if (typeof window !== 'undefined') {
+      import('react-quill-new/dist/quill.snow.css');
+    }
+    return mod;
+  }),
+  { ssr: false }
+);
 
 // FIX: limite do texto guardado no Supabase (5 MB de texto)
 const MAX_CONTENT_LENGTH = 5 * 1024 * 1024;
 
-const ADMIN_EMAIL = 'seantomasytbr@gmail.com';
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'seantomasytbr@gmail.com';
 const PDF_BUCKET_NAME = 'arquiv-files'; // Bucket criado pelo usuário
 
 // Função para gerar nome da pasta baseado no país
@@ -134,9 +140,10 @@ export default function UploadPage() {
     setIsAnalyzing(true);
 
     try {
-      // Extrair texto do PDF primeiro
+      // Extrair texto do PDF primeiro (lazy load da biblioteca)
       console.log('[PDF Upload] Extraindo texto do PDF...');
-      const extractedText = await extractTextFromPDFLimited(file, 50000);
+      const { extractTextFromPDFLimited: extractFn } = await import('@/lib/pdf-extractor');
+      const extractedText = await extractFn(file, 50000);
       setNormContent(extractedText);
       console.log(`[PDF Upload] Texto extraído: ${extractedText.length} caracteres`);
 
@@ -235,9 +242,10 @@ export default function UploadPage() {
     setIsAnalyzing(true);
 
     try {
-      // Extrair texto do DOCX (aumentado para 500k caracteres ~ 100-150 páginas)
+      // Extrair texto do DOCX (lazy load da biblioteca)
       console.log('[DOCX Upload] Extraindo texto do documento...');
-      const extractedText = await extractTextFromDOCXLimited(file, 500000, true);
+      const { extractTextFromDOCXLimited: extractFn } = await import('@/lib/docx-extractor');
+      const extractedText = await extractFn(file, 500000, true);
       setNormContent(extractedText);
       setDocxFile(file);
       console.log(`[DOCX Upload] Texto extraído: ${extractedText.length} caracteres`);

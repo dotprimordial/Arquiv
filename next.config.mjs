@@ -39,12 +39,7 @@ const nextConfig = {
         port: '',
         pathname: '/**', // This allows any path under the hostname
       },
-      {
-        protocol: 'https',
-        hostname: 'lh3.googleusercontent.com',
-        port: '',
-        pathname: '/**',
-      },
+      // Note: removed permissive googleusercontent pattern to reduce remote image surface
     ],
   },
   webpack: (config, {dev}) => {

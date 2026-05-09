@@ -266,6 +266,53 @@ function cleanHtmlFormatting(text: string): string {
     .trim();
 }
 
+  // Extract a concise snippet around the query terms from a larger content string
+  function extractBestSnippet(content: string, query: string, maxLen: number = 400): string {
+    const clean = cleanHtmlFormatting(content || '');
+    if (!clean) return '';
+
+    const q = query.trim().toLowerCase();
+    const terms = q.split(/\s+/).filter(Boolean);
+
+    // If no terms, return start of document up to maxLen
+    if (terms.length === 0) {
+      return clean.length > maxLen ? clean.substring(0, maxLen).trim() + '...' : clean;
+    }
+
+    // Find earliest occurrence of any term
+    let idx = -1;
+    for (const term of terms) {
+      const i = clean.toLowerCase().indexOf(term);
+      if (i !== -1 && (idx === -1 || i < idx)) idx = i;
+    }
+
+    // If not found, return start of document
+    if (idx === -1) {
+      // If query terms are not found, return empty to signal "no match"
+      return '';
+    }
+
+    // Center snippet around found index
+    const half = Math.floor(maxLen / 2);
+    let start = Math.max(0, idx - half);
+    // Try to align to word boundary
+    if (start > 0) {
+      const spaceIdx = clean.lastIndexOf(' ', start);
+      if (spaceIdx !== -1) start = spaceIdx + 1;
+    }
+    let end = Math.min(clean.length, start + maxLen);
+    // Extend end to end of word
+    if (end < clean.length) {
+      const spaceIdx = clean.indexOf(' ', end);
+      if (spaceIdx !== -1) end = spaceIdx;
+    }
+
+    let snippet = clean.substring(start, end).trim();
+    if (start > 0) snippet = '...' + snippet;
+    if (end < clean.length) snippet = snippet + '...';
+    return snippet;
+  }
+
 export async function searchNormsSemantic(
   query: string,
   country?: string,
@@ -332,13 +379,14 @@ export async function searchNormsSemantic(
       return [];
     }
 
-    // Prepare data for AI analysis - include more content for better section extraction
+    // Prepare data for AI analysis - limit content to force excerpt extraction
     const normsForAI = norms.map((norm) => ({
       id: norm.id,
       code: cleanHtmlFormatting(String(norm.code || "")),
       title: cleanHtmlFormatting(String(norm.title || "")),
-      description: cleanHtmlFormatting(String(norm.description || "")).substring(0, 500),
-      content: cleanHtmlFormatting(String(norm.content || "")).substring(0, 10000), // Aumentado para 10000 chars
+      description: cleanHtmlFormatting(String(norm.description || "")).substring(0, 300),
+      // Limitar conteúdo para forçar a IA a extrair trechos específicos
+      content: cleanHtmlFormatting(String(norm.content || "")).substring(0, 4000), 
       keywords: (norm.keywords as string[]) || [],
     }));
 
@@ -357,24 +405,27 @@ Normas disponíveis (${normsForAI.length}):
 ${JSON.stringify(normsForAI, null, 2)}
 
 INSTRUÇÕES CRÍTICAS:
-1. Analise a consulta e encontre APENAS os trechos específicos que respondem diretamente à pergunta
-2. NUNCA retorne o documento completo - extraia SOMENTE a parte relevante (300-500 caracteres)
-3. Se o texto estiver mal formatado, identifique padrões como:
+1. Leia a CONSULTA do usuário: "${cleanedQuery}"
+2. Encontre APENAS trechos que respondem DIRETAMENTE a esta consulta específica
+3. NUNCA retorne o documento completo - extraia SOMENTE a parte relevante
+4. O campo "excerpt" deve conter:
+   - APENAS o trecho específico que responde à pergunta do usuário
+   - 300-500 caracteres no máximo
+   - Palavras-chave da consulta DEVEM aparecer no trecho
+5. Como encontrar o trecho correto:
+   - Procure palavras-chave da consulta no texto (ex: se pesquisar "altura máxima", procure este termo)
+   - Identifique o artigo/parágrafo que contém a resposta
+   - Extraia APENAS esse artigo/parágrafo, não todo o documento
+6. Se o texto estiver mal formatado, identifique:
    - Números seguidos de texto (ex: "1. Altura máxima...", "Art. 5º Altura...")
-   - Palavras em maiúsculas no início (ex: "CAPÍTULO I", "SEÇÃO 2")
-   - Quebras de linha duplas que separam seções
+   - Palavras em maiúsculas (ex: "CAPÍTULO I", "SEÇÃO 2")
    - Palavras-chave como "Artigo", "Parágrafo", "Inciso", "Alínea"
-4. Extraia a estrutura hierárquica quando possível:
-   - chapter: nome do capítulo/seção maior (se identificável)
-   - article: número do artigo/disposição específica
-   - paragraph: parágrafo/inciso específico dentro do artigo
-5. O trecho (excerpt) deve ser CONCISO e DIRETO - inclua apenas:
-   - A regra/norma específica que responde à pergunta
-   - Contexto mínimo necessário para entender (1-2 frases antes e depois)
-   - MÁXIMO 500 caracteres por trecho
-6. Se uma norma tiver múltiplos trechos relevantes, retorne cada um como item separado no array
-7. Use APENAS dados fornecidos - NUNCA invente informações
-8. Retorne APENAS JSON válido:
+7. Extraia a estrutura hierárquica:
+   - chapter: capítulo/seção maior
+   - article: artigo/disposição específica
+   - paragraph: parágrafo/inciso específico
+8. O trecho deve ser CONCISO e relacionado à consulta - se não encontrar trecho relevante, não retorne a norma
+9. Retorne APENAS JSON válido:
 [{
   "id": "uuid da norma",
   "reasoning": "por que este trecho responde à consulta",
@@ -452,9 +503,42 @@ INSTRUÇÕES CRÍTICAS:
     }
 
     // Map AI results to SearchResult format
+    // Filter out results without valid excerpt OR with excerpts that are document-length
+    const MAX_EXCERPT_LENGTH = 2000; // Máximo de caracteres para um trecho válido (aumentado)
+    const MIN_EXCERPT_LENGTH = 100; // Mínimo de caracteres
+    
+    const validAiResults = aiResults.filter((r) => {
+      if (!r.excerpt || r.excerpt.trim().length < MIN_EXCERPT_LENGTH) return false;
+      // If excerpt is excessively long, replace with a best-effort snippet centered on query
+      if (r.excerpt.trim().length > MAX_EXCERPT_LENGTH) {
+        console.warn(`[searchNormsSemantic] Excerpt muito longo (${r.excerpt.trim().length} chars), extracting best snippet...`);
+        // Try to extract a better snippet from the original norm content if available
+        const norm = norms.find((n) => n.id === r.id);
+        if (norm && norm.content) {
+          r.excerpt = extractBestSnippet(String(norm.content), cleanedQuery, MAX_EXCERPT_LENGTH);
+        } else {
+          r.excerpt = r.excerpt.trim().substring(0, MAX_EXCERPT_LENGTH) + '...';
+        }
+      }
+
+      // Ensure the excerpt actually contains one of the query terms; if not, reject
+      const excerptLower = (r.excerpt || '').toLowerCase();
+      const terms = cleanedQuery.split(/\s+/).filter(Boolean);
+      const containsTerm = terms.some(t => t && excerptLower.includes(t));
+      return containsTerm;
+    });
+    
+    console.log('[searchNormsSemantic] Resultados válidos com excerpt:', validAiResults.length);
+    
+    // If no valid excerpts, use fallback
+    if (validAiResults.length === 0) {
+      console.warn('[searchNormsSemantic] IA retornou resultados sem excerpts válidos, usando fallback...');
+      return fallbackTextualSearch(norms, query, limit, cacheKey);
+    }
+    
     // Use index to create unique sectionId for multiple excerpts from same norm
-    const results = aiResults
-      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    const results = validAiResults
+      .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
       .slice(0, limit)
       .map((aiResult, index) => {
         const norm = norms.find((n) => n.id === aiResult.id);
@@ -467,6 +551,15 @@ INSTRUÇÕES CRÍTICAS:
         // Create unique sectionId using index to handle multiple excerpts from same norm
         const uniqueSectionId = `${String(norm.id)}-${index}`;
         
+        // Use excerpt as content, never fall back to full document
+        let excerpt = aiResult.excerpt?.trim() || '';
+        // Ensure excerpt is concise and centered on the query
+        if (excerpt.length > 500) {
+          // Prefer AI excerpt truncated, but if it's likely the full document use original content to extract snippet
+          const normFull = String(norm.content || '');
+          excerpt = extractBestSnippet(normFull, cleanedQuery, 500);
+        }
+        
         return {
           sectionId: uniqueSectionId,
           normId: String(norm.id),
@@ -476,11 +569,11 @@ INSTRUÇÕES CRÍTICAS:
           sectionType: aiResult.article ? 'artigo' : (aiResult.chapter ? 'capitulo' : 'norma'),
           sectionNumber: aiResult.article || aiResult.paragraph || null,
           sectionTitle: aiResult.chapter || null,
-          content: aiResult.excerpt || ((norm.content as string) || '') + ' ' + ((norm.description as string) || ''),
-          similarity: aiResult.relevanceScore,
+          content: excerpt, // Sempre usar apenas o excerpt da IA
+          similarity: aiResult.relevanceScore || 0.5,
           decree: aiResult.decree,
           regulationNumber: aiResult.regulationNumber,
-          excerpt: aiResult.excerpt,
+          excerpt: excerpt,
           chapter: aiResult.chapter,
           article: aiResult.article,
           paragraph: aiResult.paragraph,
@@ -532,6 +625,12 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
       // Extract country name from joined countries data
       const countryData = item.norm.countries as { name?: string } | undefined;
       const countryName = countryData?.name || '';
+      // Criar excerpt do conteúdo: localizar a query no texto e extrair snippet ao redor
+      const rawContent = ((item.norm.content as string) || '') + ' ' + ((item.norm.description as string) || '');
+      const fullContent = cleanHtmlFormatting(rawContent);
+      const excerpt = extractBestSnippet(fullContent, query, 500);
+      // If no excerpt found (term not present), skip this result by returning null
+      if (!excerpt || excerpt.trim() === '') return null;
       
       return {
         sectionId: String(item.norm.id),
@@ -542,13 +641,14 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
         sectionType: 'norma',
         sectionNumber: null,
         sectionTitle: null,
-        content: cleanHtmlFormatting(((item.norm.content as string) || '') + ' ' + ((item.norm.description as string) || '')),
+        content: excerpt, // Usar excerpt em vez de conteúdo completo
         similarity: item.score / 10,
         decree: undefined,
         regulationNumber: undefined,
-        excerpt: undefined,
+        excerpt: excerpt,
       };
-    });
+    })
+    .filter((r) => r !== null) as SearchResult[];
   
   // Cache the fallback results if cache key provided
   if (cacheKey) {

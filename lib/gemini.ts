@@ -1,9 +1,12 @@
 import OpenRouterClient, { OpenRouterMessage } from "./openrouter";
 import { supabase } from "./supabase";
 
-const apiKey = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || "";
+// Prefer server-side key. Avoid exposing API keys to client bundles.
+const apiKey = (typeof window === 'undefined')
+  ? (process.env.OPENROUTER_API_KEY || process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || '')
+  : '';
 
-const isInvalidKey = (key: string) => !key || key === "" || key === "dummy-key" || key === "MY_OPENROUTER_API_KEY";
+const isInvalidKey = (key: string) => !key || key.length < 10 || key === "dummy-key" || key === "MY_OPENROUTER_API_KEY";
 
 /**
  * Simple client-side cache for data fetching
