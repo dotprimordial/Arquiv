@@ -313,6 +313,23 @@ function cleanHtmlFormatting(text: string): string {
     return snippet;
   }
 
+// Top-level helper to infer chapter/article/paragraph from a text snippet or full document
+function parseHierarchyFromText(excerpt: string, fullText?: string) {
+  const text = (excerpt || '') + '\n' + (fullText || '');
+  const out: { chapter?: string; article?: string; paragraph?: string } = {};
+
+  const chapterMatch = text.match(/((?:CAP[IÍ]TULO|Cap[ií]tulo|SE[CÇ][ÃA]O|Seção)\s+[A-Za-z0-9\-\.\sIVXLC]+)/i);
+  if (chapterMatch) out.chapter = chapterMatch[0].trim();
+
+  const articleMatch = text.match(/(Art\.?\s*\d+\w?\b|Artigo\s+\d+\w?\b|Art\s+\d+\b)/i);
+  if (articleMatch) out.article = articleMatch[0].trim();
+
+  const paragraphMatch = text.match(/(Par[aá]grafo(?:\s+unico|\s+único)?\b|Par[aá]grafo\s+\d+\b|§\s*\d+\w?\b|Paragrafo\s+\d+\b)/i);
+  if (paragraphMatch) out.paragraph = paragraphMatch[0].trim();
+
+  return out;
+}
+
 export async function searchNormsSemantic(
   query: string,
   country?: string,
@@ -502,6 +519,8 @@ INSTRUÇÕES CRÍTICAS:
       return fallbackTextualSearch(norms, query, limit, cacheKey);
     }
 
+    
+
     // Map AI results to SearchResult format
     // Filter out results without valid excerpt OR with excerpts that are document-length
     const MAX_EXCERPT_LENGTH = 2000; // Máximo de caracteres para um trecho válido (aumentado)
@@ -646,6 +665,8 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
         decree: undefined,
         regulationNumber: undefined,
         excerpt: excerpt,
+        // Infer hierarchy from excerpt/full content when not provided by AI
+        ...parseHierarchyFromText(excerpt, fullContent),
       };
     })
     .filter((r) => r !== null) as SearchResult[];

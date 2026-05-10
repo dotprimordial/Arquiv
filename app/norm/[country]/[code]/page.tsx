@@ -68,9 +68,26 @@ export default function NormDetailPage() {
           .maybeSingle();
 
         // If a record exists and countries match, it's official
-        if (data && data.id) {
+        if (data && (data as { id?: unknown }).id) {
           // if countries name is present, compare it
-          const countryName = (data as any).countries?.[0]?.name || (data as any).countries?.name;
+          const getCountryName = (d: unknown): string | undefined => {
+            if (!d || typeof d !== 'object') return undefined;
+            const obj = d as Record<string, unknown>;
+            const maybeCountries = obj['countries'];
+            if (Array.isArray(maybeCountries)) {
+              const first = maybeCountries[0];
+              if (first && typeof first === 'object') {
+                const nameVal = (first as Record<string, unknown>)['name'];
+                if (typeof nameVal === 'string') return nameVal;
+              }
+            } else if (maybeCountries && typeof maybeCountries === 'object') {
+              const nameVal = (maybeCountries as Record<string, unknown>)['name'];
+              if (typeof nameVal === 'string') return nameVal;
+            }
+            return undefined;
+          };
+
+          const countryName = getCountryName(data);
           if (!countryName || countryName === country) {
             setIsAIGenerated(false);
             return;

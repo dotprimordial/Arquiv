@@ -417,7 +417,7 @@ export default function UploadPage() {
     'bold', 'italic', 'underline', 'strike', 'script',
     'color', 'background',
     'align',
-    'list', 'bullet', 'check', 'indent',
+    'list', 'indent',
     'blockquote', 'code-block',
     'link', 'image', 'video',
     'clean'

@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { LogIn, LogOut, Upload as UploadIcon, User, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
 import CountrySelector, { Country, countries } from '@/components/CountrySelector';
-import NormSearch from '@/components/NormSearch';
+import { ActionSearchBar } from '@/components/ui/action-search-bar';
 import NormDisplay from '@/components/NormDisplay';
 import { getArchitecturalNorms, Norm, updateNorm, getActiveCountries } from '@/lib/gemini';
 import { supabase } from '@/lib/supabase';
@@ -355,7 +355,7 @@ export default function Home() {
 
       {/* Search Bar */}
       <div className="mb-4">
-        <NormSearch onSearch={handleSearch} isLoading={isLoading} />
+        <ActionSearchBar onSearch={handleSearch} isLoading={isLoading} placeholder="Pesquisar normas por código, título ou categoria..." />
       </div>
 
       {/* AI Search Toggle */}

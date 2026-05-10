@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 import './globals.css';
 import AdScript from '@/components/AdScript';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
+import { cn } from "@/lib/utils";
 
 // Use nodejs runtime for better compatibility with database operations
 export const runtime = 'nodejs';
@@ -70,10 +71,7 @@ const structuredData = {
   ],
 };
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-});
+const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -193,7 +191,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt" suppressHydrationWarning className={`${inter.variable} ${spaceGrotesk.variable} ${playfair.variable} ${equinox.variable}`}>
+    <html lang="pt" suppressHydrationWarning className={cn(spaceGrotesk.variable, playfair.variable, equinox.variable, "font-sans", inter.variable)}>
       <head>
         <script
           type="application/ld+json"
