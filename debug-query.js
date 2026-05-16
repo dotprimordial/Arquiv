@@ -1,8 +1,14 @@
 const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config({ path: '.env.local' });
 
-// Supabase credentials
-const supabaseUrl = 'https://cpyxixrjsgxccayqzkxc.supabase.co';
-const supabaseKey = 'sb_publishable_Vdfaj3AupiGxeMD4j5ingA_dxyjy1Oh';
+// Use environment variables for credentials to avoid leaking secrets
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Supabase credentials not available. Set SUPABASE_URL and SUPABASE_KEY in your environment.');
+  process.exit(1);
+}
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -13,7 +19,7 @@ async function main() {
     // Exactly what getArchitecturalNorms does
     const country = 'Portugal';
     const category = 'Todas';
-    const selectFields = "id, code, title, description, category_id, country_id, keywords, total_sections";
+    const selectFields = "id, code, title, category_id, country_id, keywords, total_sections, summaries!left(summary)";
 
     console.log(`Buscando normas para: País="${country}", Categoria="${category}"`);
     console.log(`SELECT: ${selectFields}\n`);

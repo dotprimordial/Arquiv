@@ -7,10 +7,13 @@ import Image from 'next/image';
 import CountrySelector, { Country, countries } from '@/components/CountrySelector';
 import { ActionSearchBar } from '@/components/ui/action-search-bar';
 import NormDisplay from '@/components/NormDisplay';
+import SearchRateLimitDisplay from '@/components/SearchRateLimitDisplay';
+import { RateLimitModal } from '@/components/RateLimitModal';
 import { getArchitecturalNorms, Norm, updateNorm, getActiveCountries } from '@/lib/gemini';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { searchNormsSemantic, SearchResult, deleteNormServer } from '@/app/actions/norm-actions';
+import { toast } from 'sonner';
 
 // Lazy load heavy components
 const SemanticNormDisplay = lazy(() => import('@/components/SemanticNormDisplay'));
@@ -45,9 +48,13 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeCountryNames, setActiveCountryNames] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalNormsCount, setTotalNormsCount] = useState(0);
+  const pageSize = 10;
 
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isRateLimitModalOpen, setIsRateLimitModalOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const router = useRouter();
@@ -126,7 +133,7 @@ export default function Home() {
     };
   }, []);
 
-  const fetchNorms = useCallback(async (country: string, category: string, query: string, useAi: boolean = false) => {
+  const fetchNorms = useCallback(async (country: string, category: string, query: string, useAi: boolean = false, page: number = 1) => {
     if (!country || country.trim() === '') {
       console.warn('[fetchNorms] País inválido ou não selecionado, cancelando busca.');
       setNorms(null);
@@ -135,7 +142,7 @@ export default function Home() {
     }
 
     // FIX #15: Guard contra fetches paralelos e duplicados
-    const requestKey = `${country}-${category}-${query}-${useAi}`;
+    const requestKey = `${country}-${category}-${query}-${useAi}-${page}`;
     if (lastRequestKeyRef.current === requestKey && isFetchingRef.current) {
       console.log('[fetchNorms] Requisição duplicada ignorada:', requestKey);
       return;
@@ -158,33 +165,44 @@ export default function Home() {
           } catch (semanticErr) {
             console.error('Busca semântica falhou, usando busca tradicional:', semanticErr);
             // Fallback automático para busca tradicional se semântica falhar
-            const data = await getArchitecturalNorms(country, category, query, false);
-            setNorms(data);
+            const data = await getArchitecturalNorms(country, category, query, false, page, pageSize);
+            setNorms(data.norms);
+            setTotalNormsCount(data.totalCount);
             setSemanticResults(null);
           }
         } else {
           console.log('Usando busca textual normal (sem IA) para:', query);
-          const data = await getArchitecturalNorms(country, category, query, false);
-          setNorms(data);
+          const data = await getArchitecturalNorms(country, category, query, false, page, pageSize);
+          setNorms(data.norms);
+          setTotalNormsCount(data.totalCount);
           setSemanticResults(null);
         }
       } else {
         console.log('Usando busca tradicional (listagem)');
-        const data = await getArchitecturalNorms(country, category, query, false);
-        setNorms(data);
+        const data = await getArchitecturalNorms(country, category, query, false, page, pageSize);
+        setNorms(data.norms);
+        setTotalNormsCount(data.totalCount);
         setSemanticResults(null);
       }
     } catch (err: unknown) {
       console.error('Erro na busca:', err);
       const msg = err instanceof Error ? err.message : String(err);
-      setError(msg.includes('API') ? 'Erro de conexão com o serviço de busca. Tente novamente.' : msg);
+
+      // Check if error is rate limit related for anonymous users
+      if (msg.includes('Limite') && !user) {
+        setError(null);
+        setIsRateLimitModalOpen(true);
+      } else {
+        setError(msg.includes('API') ? 'Erro de conexão com o serviço de busca. Tente novamente.' : msg);
+      }
+
       setNorms(null);
       setSemanticResults(null);
     } finally {
       setIsLoading(false);
       isFetchingRef.current = false;
     }
-  }, []);
+  }, [user, pageSize]);
 
   // FIX #17: Separar useEffect por responsabilidade — país/categoria vs query
   useEffect(() => {
@@ -194,9 +212,10 @@ export default function Home() {
       return;
     }
     console.log('[Home] Disparando fetchNorms com país:', selectedCountry.name);
-    fetchNorms(selectedCountry.name, selectedCategory, searchQuery, isAiSearchEnabled);
+    setCurrentPage(1);
+    fetchNorms(selectedCountry.name, selectedCategory, searchQuery, isAiSearchEnabled, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCountry?.name, selectedCategory, isAiSearchEnabled]); // Incluir isAiSearchEnabled
+  }, [selectedCountry, selectedCategory, isAiSearchEnabled, searchQuery]);
 
   const handleSearch = useCallback((query: string) => {
     if (!selectedCountry?.name) {
@@ -209,34 +228,43 @@ export default function Home() {
     }
 
     setSearchQuery(query);
+    setCurrentPage(1);
 
     // FIX #18: Debounce aumentado para 500ms para evitar chamadas excessivas
     debounceTimerRef.current = setTimeout(() => {
       if (!selectedCountry?.name) return;
-      fetchNorms(selectedCountry.name, selectedCategory, query, isAiSearchEnabled);
+      fetchNorms(selectedCountry.name, selectedCategory, query, isAiSearchEnabled, 1);
     }, 500);
   }, [selectedCountry?.name, selectedCategory, fetchNorms, isAiSearchEnabled]);
 
   // FIX #7: Usar Server Action deleteNormServer em vez de cliente direto
   const handleDeleteNorm = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta norma?')) return;
-    try {
-      await deleteNormServer(id);
-      setNorms(prev => prev ? prev.filter(n => n.id !== id) : null);
-      // FIX #14: Atualizar países sem criar loop
-      fetchActiveCountries();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      alert('Erro ao excluir norma: ' + msg);
-    }
+    toast('Tem certeza que deseja excluir esta norma?', {
+      action: {
+        label: 'Confirmar',
+        onClick: async () => {
+          try {
+            await deleteNormServer(id);
+            setNorms(prev => prev ? prev.filter(n => n.id !== id) : null);
+            // FIX #14: Atualizar países sem criar loop
+            fetchActiveCountries();
+            toast.success('Norma excluída com sucesso!');
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            toast.error('Erro ao excluir norma: ' + msg);
+          }
+        },
+      },
+    });
   };
 
   const handleUpdateNorm = async (id: string, updates: Partial<Norm>) => {
     try {
       const updated = await updateNorm(id, updates);
       setNorms(prev => prev ? prev.map(n => n.id === id ? { ...n, ...updated } : n) : null);
+      toast.success('Norma atualizada com sucesso!');
     } catch (err: unknown) {
-      alert('Erro ao atualizar norma: ' + (err instanceof Error ? err.message : String(err)));
+      toast.error('Erro ao atualizar norma: ' + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -313,14 +341,19 @@ export default function Home() {
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="flex items-center gap-2 px-4 xs:px-6 py-2 bg-zinc-900 text-white rounded-full text-xs xs:text-sm font-bold hover:bg-zinc-800 transition-all shadow-sm"
-              >
-                <LogIn className="w-4 h-4" />
-                <span className="hidden xs:inline">Entrar / Registar</span>
-                <span className="inline xs:hidden">Entrar</span>
-              </button>
+              <div className="flex items-center gap-3">
+                <div className="hidden sm:block">
+                  <SearchRateLimitDisplay compact={true} />
+                </div>
+                <button
+                  onClick={() => setIsAuthModalOpen(true)}
+                  className="flex items-center gap-2 px-4 xs:px-6 py-2 bg-zinc-900 text-white rounded-full text-xs xs:text-sm font-bold hover:bg-zinc-800 transition-all shadow-sm"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span className="hidden xs:inline">Entrar / Registar</span>
+                  <span className="inline xs:hidden">Entrar</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -412,6 +445,7 @@ export default function Home() {
             countryName={selectedCountry?.name || ''}
             countryCode={selectedCountry?.code || ''}
             hasSearchQuery={searchQuery.trim() !== ''}
+            isAdmin={isAdmin}
           />
         </Suspense>
       ) : (
@@ -430,6 +464,63 @@ export default function Home() {
         </Suspense>
       )}
 
+      {/* Pagination */}
+      {norms && norms.length > 0 && totalNormsCount > pageSize && (
+        <div className="flex justify-center mt-8">
+          <div className="flex items-center gap-2 text-gray-500">
+            <button
+              type="button"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="mr-4 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="mt-1.5" width="9" height="13" viewBox="0 0 9 13" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 1 2 6.667 8 12" stroke="#111820" strokeOpacity=".5" strokeWidth="2" strokeLinecap="round"/></svg>
+              <span>prev</span>
+            </button>
+
+            <div className="flex gap-2 text-sm md:text-base">
+              {Array.from({ length: Math.min(5, Math.ceil(totalNormsCount / pageSize)) }, (_, i) => {
+                const totalPages = Math.ceil(totalNormsCount / pageSize);
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`flex items-center justify-center w-9 md:w-12 h-9 md:h-12 aspect-square rounded-md transition-all ${
+                      currentPage === pageNum
+                        ? 'border border-indigo-500 text-indigo-500'
+                        : 'hover:bg-slate-100/80'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalNormsCount / pageSize), p + 1))}
+              disabled={currentPage >= Math.ceil(totalNormsCount / pageSize)}
+              className="ml-4 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span>next</span>
+              <svg className="mt-1.5" width="9" height="13" viewBox="0 0 9 13" fill="none" xmlns="http://www.w3.org/2000/svg" transform="scale(-1 1)"><path d="M8 1 2 6.667 8 12" stroke="#111820" strokeOpacity=".5" strokeWidth="2" strokeLinecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Auth Modal */}
       <Suspense fallback={null}>
         <AuthModal
@@ -437,6 +528,16 @@ export default function Home() {
           onClose={() => setIsAuthModalOpen(false)}
         />
       </Suspense>
+
+      {/* Rate Limit Modal for Anonymous Users */}
+      <RateLimitModal
+        isOpen={isRateLimitModalOpen}
+        onClose={() => setIsRateLimitModalOpen(false)}
+        onSignUp={() => {
+          setIsRateLimitModalOpen(false);
+          setIsAuthModalOpen(true);
+        }}
+      />
     </main>
   );
 }

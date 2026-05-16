@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Space_Grotesk, Playfair_Display } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import localFont from 'next/font/local';
 import Script from 'next/script';
 import { Toaster } from 'sonner';
@@ -71,17 +71,7 @@ const structuredData = {
   ],
 };
 
-const inter = Inter({subsets:['latin'],variable:'--font-sans'});
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
-  variable: '--font-display',
-});
-
-const playfair = Playfair_Display({
-  subsets: ['latin'],
-  variable: '--font-serif',
-});
+const inter = Inter({subsets:['latin'],variable:'--font-sans',display:'swap'});
 
 const equinox = localFont({
   src: [
@@ -97,6 +87,7 @@ const equinox = localFont({
     },
   ],
   variable: '--font-equinox',
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -182,7 +173,7 @@ export const metadata: Metadata = {
     'theme-color': '#1e40af',
     'msapplication-TileColor': '#1e40af',
     'msapplication-TileImage': '/icons/icon-nopadding.png',
-    'apple-mobile-web-app-capable': 'yes',
+    'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-status-bar-style': 'black-translucent',
     'apple-mobile-web-app-title': 'Arquiv',
     'format-detection': 'telephone=no',
@@ -191,7 +182,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt" suppressHydrationWarning className={cn(spaceGrotesk.variable, playfair.variable, equinox.variable, "font-sans", inter.variable)}>
+    <html lang="pt" suppressHydrationWarning className={cn(equinox.variable, "font-sans", inter.variable)}>
       <head>
         <script
           type="application/ld+json"
@@ -203,10 +194,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Toaster position="top-center" richColors />
         <AdScript />
         <ServiceWorkerRegister />
-        <Script 
-          src="https://wistfulseverely.com/e5/7a/ba/e57abaff382f551b0e067ea3a9e1cc9d.js"
-          strategy="lazyOnload"
-        />
       </body>
     </html>
   );

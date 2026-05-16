@@ -1,20 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Clock, Sparkles, X } from 'lucide-react';
+import { Search, Clock, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-interface Recommendation {
-  code: string;
-  title: string;
-}
 
 interface ActionSearchBarProps {
   onSearch: (query: string) => void;
   isLoading?: boolean;
   placeholder?: string;
   maxRecentSearches?: number;
-  aiRecommendations?: Recommendation[];
 }
 
 export function ActionSearchBar({
@@ -22,13 +16,10 @@ export function ActionSearchBar({
   isLoading = false,
   placeholder = "Pesquisar normas por código, título ou categoria...",
   maxRecentSearches = 5,
-  aiRecommendations = [],
 }: ActionSearchBarProps) {
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [isLoadingRecs, setIsLoadingRecs] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -43,52 +34,6 @@ export function ActionSearchBar({
       }
     }
   }, []);
-
-  // Fetch AI recommendations when focused
-  useEffect(() => {
-    if (isFocused && recommendations.length === 0 && !isLoadingRecs) {
-      fetchRecommendations();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused]);
-
-  const fetchRecommendations = async () => {
-    setIsLoadingRecs(true);
-    try {
-      // If recommendations passed as prop, use them
-      if (aiRecommendations.length > 0) {
-        setRecommendations(aiRecommendations);
-        return;
-      }
-
-      // Otherwise, fetch trending norms from server
-      const response = await fetch('/api/norms/trending?limit=5');
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Ensure data is an array
-        if (!Array.isArray(data)) {
-          console.error('API returned non-array response:', data);
-          setRecommendations([]);
-          return;
-        }
-        
-        const formatted = data.map((norm: Record<string, unknown>) => ({
-          code: (norm.code as string) || '',
-          title: (norm.title as string) || '',
-        }));
-        setRecommendations(formatted);
-      } else {
-        console.error('Failed to fetch trending norms:', response.status);
-        setRecommendations([]);
-      }
-    } catch (error) {
-      console.error('Failed to fetch recommendations:', error);
-      setRecommendations([]);
-    } finally {
-      setIsLoadingRecs(false);
-    }
-  };
 
   // Save recent searches to localStorage
   const addRecentSearch = (searchQuery: string) => {
@@ -118,14 +63,6 @@ export function ActionSearchBar({
     setQuery(recentQuery);
     addRecentSearch(recentQuery);
     onSearch(recentQuery);
-    setIsFocused(false);
-  };
-
-  const handleRecommendationClick = (rec: Recommendation) => {
-    const searchText = `${rec.code}`;
-    setQuery(searchText);
-    addRecentSearch(searchText);
-    onSearch(searchText);
     setIsFocused(false);
   };
 
@@ -177,9 +114,9 @@ export function ActionSearchBar({
         )}
       </form>
 
-      {/* Dropdown: Recent Searches + AI Recommendations */}
+      {/* Dropdown: Recent Searches */}
       <AnimatePresence>
-        {isFocused && (recentSearches.length > 0 || (recommendations.length > 0 && !query)) && (
+        {isFocused && recentSearches.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -214,62 +151,15 @@ export function ActionSearchBar({
                         <span className="text-sm text-zinc-700 truncate">
                           {recentQuery}
                         </span>
-                        <button
+                        <div
                           onClick={(e) => handleClearRecent(e, recentQuery)}
-                          className="p-1 opacity-0 group-hover/item:opacity-100 transition-opacity hover:bg-zinc-200 rounded"
+                          className="p-1 opacity-0 group-hover/item:opacity-100 transition-opacity hover:bg-zinc-200 rounded cursor-pointer"
+                          role="button"
                         >
                           <X className="w-3 h-3 text-zinc-400" />
-                        </button>
+                        </div>
                       </motion.button>
                     ))}
-                  </div>
-                </div>
-              )}
-
-              {/* AI Recommendations Section */}
-              {(recommendations.length > 0 || isLoadingRecs) && (
-                <div>
-                  {recentSearches.length > 0 && (
-                    <div className="border-t border-zinc-100 my-2" />
-                  )}
-                  <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-3 h-3 text-purple-500" />
-                      Recomendações
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    {isLoadingRecs ? (
-                      <div className="px-3 py-2 flex items-center gap-2 text-sm text-zinc-500">
-                        <div className="w-4 h-4 border-2 border-zinc-200 border-t-purple-500 rounded-full animate-spin" />
-                        Carregando...
-                      </div>
-                    ) : (
-                      recommendations.map((rec, idx) => (
-                        <motion.button
-                          key={`rec-${idx}`}
-                          initial={{ opacity: 0, x: -4 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -4 }}
-                          transition={{ delay: idx * 0.03 }}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleRecommendationClick(rec);
-                          }}
-                          className="w-full flex items-start justify-between px-3 py-2 hover:bg-purple-50 rounded-lg transition-colors text-left group/rec"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-zinc-900 truncate">
-                              {rec.code}
-                            </div>
-                            <div className="text-xs text-zinc-500 truncate">
-                              {rec.title}
-                            </div>
-                          </div>
-                          <Sparkles className="w-3 h-3 text-purple-400 ml-2 flex-shrink-0 opacity-0 group-hover/rec:opacity-100 transition-opacity" />
-                        </motion.button>
-                      ))
-                    )}
                   </div>
                 </div>
               )}

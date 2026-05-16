@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     console.log(`[api/norms] Query: country=${countryParam}, category=${categoryParam}`);
 
     const supabase = await getAuthenticatedSupabaseClient();
-    const selectFields = "id, code, title, description, category_id, country_id, keywords, total_sections";
+    const selectFields = "id, code, title, category_id, country_id, keywords, total_sections, summaries!left(summary)";
 
     // Get country ID
     const { data: countryData, error: countryError } = await supabase
@@ -22,8 +22,7 @@ export async function GET(request: Request) {
 
     if (countryError || !countryData) {
       return Response.json({
-        error: `País "${countryParam}" não encontrado`,
-        details: countryError?.message
+        error: `País "${countryParam}" não encontrado`
       }, { status: 400 });
     }
 
@@ -48,8 +47,7 @@ export async function GET(request: Request) {
 
     if (normsError) {
       return Response.json({
-        error: 'Erro ao buscar normas',
-        details: normsError.message
+        error: 'Erro ao buscar normas'
       }, { status: 500 });
     }
 
@@ -61,10 +59,9 @@ export async function GET(request: Request) {
       norms: norms || []
     });
   } catch (error: unknown) {
-    const err = error as Error;
+    console.error('[api/norms] Ocorreu um erro na API');
     return Response.json({
-      error: 'Erro interno',
-      details: err?.message
+      error: 'Erro interno no servidor'
     }, { status: 500 });
   }
 }

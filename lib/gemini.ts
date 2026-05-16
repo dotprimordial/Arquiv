@@ -3,7 +3,7 @@ import { supabase } from "./supabase";
 
 // Prefer server-side key. Avoid exposing API keys to client bundles.
 const apiKey = (typeof window === 'undefined')
-  ? (process.env.OPENROUTER_API_KEY || process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || '')
+  ? (process.env.OPENROUTER_API_KEY || '')
   : '';
 
 const isInvalidKey = (key: string) => !key || key.length < 10 || key === "dummy-key" || key === "MY_OPENROUTER_API_KEY";
@@ -35,6 +35,7 @@ export interface Norm {
   category_id: number;
   country_id: number;
   description?: string;
+  summary?: string;
   keywords?: string[];
   reasoning?: string;
   excerpt?: string;
@@ -60,31 +61,34 @@ export const getArchitecturalNorms = async (
   country: string,
   category: string = "Todas",
   queryText?: string,
-  useAi: boolean = false
-): Promise<Norm[]> => {
-  const cacheKey = `norms:${country}:${category}:${queryText || 'all'}:${useAi}`;
+  useAi: boolean = false,
+  page: number = 1,
+  pageSize: number = 10
+): Promise<{ norms: Norm[]; totalCount: number }> => {
+  const cacheKey = `norms:${country}:${category}:${queryText || 'all'}:${useAi}:${page}:${pageSize}`;
   
   // Check cache first (5 minutes TTL for search results)
-  const cached = getClientCache<Norm[]>(cacheKey);
+  const cached = getClientCache<{ norms: Norm[]; totalCount: number }>(cacheKey);
   if (cached) {
     console.log(`[Cache] Hit for norms: ${country}/${category}/${queryText || 'all'}`);
     return cached;
   }
-  
-  console.log(`[getArchitecturalNorms] Iniciando busca: ${country}, categoria: ${category}, query: "${queryText}"`);
+
+  console.log(`[getArchitecturalNorms] Iniciando busca: ${country}, categoria: ${category}, query: "${queryText}", page: ${page}, pageSize: ${pageSize}`);
 
   if (!country || country.trim() === '') {
     console.warn('[getArchitecturalNorms] País inválido ou não informado, retornando lista vazia.');
-    return [];
+    return { norms: [], totalCount: 0 };
   }
 
   let results: Norm[] = [];
+  let totalCount = 0;
 
   try {
     const isSearchMode = queryText && queryText.trim() !== "";
 
-    // FIX #21: Use NORMALIZED schema - select fields from norms with FK ids
-    const selectFields = "id, code, title, description, category_id, country_id, keywords, total_sections";
+    // FIX #21: Use NORMALIZED schema
+    const selectFields = "id, code, title, category_id, country_id, keywords, total_sections, summaries!left(summary)";
 
     console.log(`[getArchitecturalNorms] Modo: ${isSearchMode ? "PESQUISA" : "LISTA SIMPLES"}`);
     console.log(`[getArchitecturalNorms] DEBUG - Country: "${country}" | Category: "${category}" | Query: "${queryText || 'none'}"`);
@@ -102,7 +106,7 @@ export const getArchitecturalNorms = async (
 
       if (countryError || !countryData) {
         console.error("[getArchitecturalNorms] País não encontrado:", country);
-        return [];
+        return { norms: [], totalCount: 0 };
       }
 
       let query = supabase
@@ -122,7 +126,17 @@ export const getArchitecturalNorms = async (
         }
       }
 
-      const result = await query.limit(50);
+      // Get total count first
+      const { count } = await supabase
+        .from("norms")
+        .select("id", { count: "exact", head: true })
+        .eq("country_id", (countryData as { id?: string }).id);
+
+      totalCount = count || 0;
+
+      // Apply pagination
+      const offset = (page - 1) * pageSize;
+      const result = await query.range(offset, offset + pageSize - 1);
       data = result.data as Norm[] | null;
       error = result.error as Error | null;
 
@@ -132,17 +146,17 @@ export const getArchitecturalNorms = async (
       }
     } catch (queryError) {
       console.error("[getArchitecturalNorms] Exception durante query:", queryError);
-      return [];
+      return { norms: [], totalCount: 0 };
     }
 
     if (error) {
       console.error("[getArchitecturalNorms] Erro Supabase:", error);
-      return [];
+      return { norms: [], totalCount: 0 };
     }
 
     if (!data || data.length === 0) {
       console.log(`[getArchitecturalNorms] DEBUG - No norms found for country: ${country}`);
-      return [];
+      return { norms: [], totalCount: 0 };
     }
 
     // Sem pesquisa: retornar lista leve imediatamente
@@ -152,8 +166,8 @@ export const getArchitecturalNorms = async (
         reasoning: n.description || `Norma ${n.code} - ${n.title}`,
       }));
       // Cache and return
-      setClientCache(cacheKey, results, 5);
-      return results;
+      setClientCache(cacheKey, { norms: results, totalCount: results.length }, 5);
+      return { norms: results, totalCount: results.length };
     }
 
     // FIX #22: If useAi=true and tener API key, try search with AI first
@@ -191,7 +205,7 @@ INSTRUÇÕES:
         console.log("[getArchitecturalNorms] Usando IA para busca...");
         const response = await openRouter.chatCompletion(
           messages,
-          "google/gemma-4-31b-it:free",
+          "anthropic/claude-3.5-haiku",
           0.1,
           { type: "json_object" }
         );
@@ -218,8 +232,8 @@ INSTRUÇÕES:
             })
             .filter((n): n is Norm => n !== null);
           // Cache and return
-          setClientCache(cacheKey, results, 5);
-          return results;
+          setClientCache(cacheKey, { norms: results, totalCount: totalCount }, 5);
+          return { norms: results, totalCount };
         }
       } catch (err) {
         console.error("[getArchitecturalNorms] IA falhou, usando busca textual:", err);
@@ -277,11 +291,11 @@ INSTRUÇÕES:
     }
 
     // Cache and return results
-    setClientCache(cacheKey, results, 5);
-    return results;
+    setClientCache(cacheKey, { norms: results, totalCount: totalCount }, 5);
+    return { norms: results, totalCount };
   } catch (outerError) {
     console.error("[getArchitecturalNorms] Erro geral:", outerError);
-    return [];
+    return { norms: [], totalCount: 0 };
   }
 };
 
@@ -301,7 +315,13 @@ export const extractDocumentStructure = async (
   }>;
 }> => {
   if (isInvalidKey(apiKey)) {
-    throw new Error("OpenRouter API Key não configurada para análise de documento.");
+    console.warn('[extractDocumentStructure] API Key não configurada, retornando resultado vazio');
+    return {
+      structuredContent: content,
+      categories: [],
+      keywords: [],
+      sections: []
+    };
   }
 
   try {
@@ -333,7 +353,7 @@ Responda APENAS com JSON válido, sem markdown:
 
     const messages: OpenRouterMessage[] = [{ role: "user", content: prompt + "\n\nDOCUMENTO:\n" + content.substring(0, 12000) }];
 
-    const response = await openRouter.chatCompletion(messages, "google/gemma-4-31b-it:free", 0.1, {
+    const response = await openRouter.chatCompletion(messages, "anthropic/claude-3.5-haiku", 0.3, {
       type: "json_object",
     });
 

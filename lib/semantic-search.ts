@@ -21,7 +21,7 @@ export class EmbeddingClient {
           'X-Title': 'Arquiv - Semantic Search',
         },
         body: JSON.stringify({
-          model: 'openai/text-embedding-3-small',
+          model: 'perplexity/pplx-embed-v1-4b',
           input: text.substring(0, 8000),
         }),
       });
@@ -97,8 +97,8 @@ Responda APENAS em JSON válido no formato:
   try {
     const response = await openRouter.chatCompletion(
       messages,
-      'google/gemma-4-31b-it:free',
-      0.1,
+      'anthropic/claude-3.5-haiku',
+      0.3,
       { type: 'json_object' }
     );
 

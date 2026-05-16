@@ -16,14 +16,14 @@ export async function GET(req: NextRequest) {
     // In a real app, you'd track view counts or search frequency
     const { data: norms, error } = await supabase
       .from('norms')
-      .select('id, code, title, category_id, categories(name)')
+      .select('id, code, title, category_id, categories(name), summaries!left(summary)')
       .order('created_at', { ascending: false })
       .limit(limit);
 
     if (error) {
-      console.error('[GET /api/norms/trending] Error fetching norms:', error);
+      console.error('[GET /api/norms/trending] Ocorreu um erro');
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Erro ao buscar normas em alta' },
         { status: 500 }
       );
     }
@@ -45,9 +45,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(formatted);
   } catch (error) {
-    console.error('[GET /api/norms/trending] Unexpected error:', error);
+    console.error('[GET /api/norms/trending] Ocorreu um erro');
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Erro interno no servidor' },
       { status: 500 }
     );
   }

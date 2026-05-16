@@ -13,8 +13,8 @@ declare global {
 
 // Search cache: 5 minutes TTL (300 seconds)
 const SEARCH_TTL = 300;
-// Static cache: 10 minutes TTL (600 seconds)
-const STATIC_TTL = 600;
+// Static cache: 1 hour TTL (3600 seconds)
+const STATIC_TTL = 3600;
 
 function getSearchCache(): Map<string, { value: unknown; expiry: number }> {
   if (!globalThis.__CACHE_SEARCH__) {

@@ -9,8 +9,12 @@ import {
   FileText, 
   AlertCircle,
   Loader2,
+  Wand2,
 } from 'lucide-react';
-import { SearchResult } from '@/app/actions/norm-actions';
+import { SearchResult, generateNormSummaryServer } from '@/app/actions/norm-actions';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface GroupedSearchResult {
   normId: string;
@@ -27,6 +31,7 @@ interface SemanticNormDisplayProps {
   countryName: string;
   countryCode: string;
   hasSearchQuery: boolean;
+  isAdmin?: boolean;
 }
 
 function SemanticNormDisplay({
@@ -36,9 +41,25 @@ function SemanticNormDisplay({
   countryName,
   countryCode,
   hasSearchQuery,
+  isAdmin = false,
 }: SemanticNormDisplayProps) {
+  console.log('[SemanticNormDisplay] isAdmin:', isAdmin);
   const [expandedNorms, setExpandedNorms] = useState<Set<string>>(new Set());
   const [expandedContents, setExpandedContents] = useState<Set<string>>(new Set());
+  const [generatingSummaryId, setGeneratingSummaryId] = useState<string | null>(null);
+
+  const handleGenerateSummary = async (normId: string) => {
+    setGeneratingSummaryId(normId);
+    try {
+      await generateNormSummaryServer(normId);
+      toast.success('Resumo gerado com sucesso!');
+      // Pequeno delay para dar tempo do banco atualizar antes do refresh opcional
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao gerar resumo');
+    } finally {
+      setGeneratingSummaryId(null);
+    }
+  };
 
   const toggleContentExpanded = (sectionId: string) => {
     setExpandedContents(prev => {
@@ -150,17 +171,19 @@ function SemanticNormDisplay({
       {groupedResults.map((group, groupIndex) => (
         <motion.div
           key={group.normId}
-          initial={{ opacity: 0, transform: 'translateY(10px)' }}
-          animate={{ opacity: 1, transform: 'translateY(0px)' }}
+          layout
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{
-            delay: Math.min(groupIndex * 0.05, 0.3),
             duration: 0.25,
             ease: 'easeOut'
           }}
-          className="bg-white border border-zinc-100 rounded-2xl overflow-hidden hover:shadow-lg transition-all will-change-transform gpu-accelerated"
+          className="p-0 hover:shadow-lg transition-all will-change-transform gpu-accelerated"
         >
-          {/* Norm Header */}
-          <div className="p-6 bg-gradient-to-r from-zinc-50 to-white">
+          <div className="w-full">
+            {/* Norm Header */}
+            <div className="bg-white border border-zinc-100 rounded-2xl overflow-hidden shadow-sm">
+              <div className="p-6 bg-gradient-to-r from-zinc-50 to-white">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2 flex-1">
                 <div className="flex items-center gap-3">
@@ -175,12 +198,14 @@ function SemanticNormDisplay({
                   {group.normTitle}
                 </h3>
               </div>
+              
+              {/* Admin Actions - Moved to bottom */}
             </div>
           </div>
 
-          {/* Sections List - First section always visible, others collapsible */}
-          <div className="border-t border-zinc-100">
-            <div className="p-6 space-y-4">
+              {/* Sections List - First section always visible, others collapsible */}
+              <div className="border-t border-zinc-100">
+                <div className="p-6 space-y-4">
               {/* First section - ALWAYS VISIBLE */}
               {group.sections[0] && (
                 <motion.div
@@ -336,6 +361,37 @@ function SemanticNormDisplay({
                   )}
                 </>
               )}
+                </div>
+              </div>
+              
+              {/* Footer Actions */}
+              <div className="p-4 bg-zinc-50 border-t border-zinc-100 flex items-center gap-4">
+                <Link 
+                  href={`/norm_detail/${encodeURIComponent(group.normId)}`}
+                  className="inline-flex items-center gap-2 text-sm font-bold text-zinc-900 hover:gap-3 transition-all"
+                >
+                  Ler mais <ArrowRight className="w-4 h-4" />
+                </Link>
+
+                {isAdmin && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleGenerateSummary(group.normId);
+                    }}
+                    disabled={generatingSummaryId === group.normId}
+                    className="inline-flex items-center gap-2 text-sm font-bold text-amber-600 hover:text-amber-700 transition-all disabled:opacity-50"
+                    title="Gerar Resumo Manualmente"
+                  >
+                    {generatingSummaryId === group.normId ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Wand2 className="w-4 h-4" />
+                    )}
+                    Resumir
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </motion.div>

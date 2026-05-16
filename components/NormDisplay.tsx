@@ -2,11 +2,13 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronDown, Loader2, AlertCircle, BookOpen, ArrowRight, Compass, ChevronUp } from 'lucide-react';
+import { ChevronDown, Loader2, AlertCircle, BookOpen, ArrowRight, Compass, ChevronUp, Wand2 } from 'lucide-react';
 import Link from 'next/link';
 
 import { Trash2, Edit2 } from 'lucide-react';
 import { Norm } from '@/lib/gemini';
+import { generateNormSummaryServer } from '@/app/actions/norm-actions';
+import { toast } from 'sonner';
 
 interface NormDisplayProps {
   norms: (Norm & { reasoning?: string; excerpt?: string })[] | null;
@@ -31,7 +33,21 @@ function NormDisplay({
   hasSearchQuery = false, // Default: sem pesquisa
   isAdmin = false // Default: não é admin
 }: NormDisplayProps) {
+  console.log('[NormDisplay] isAdmin:', isAdmin);
   const [expandedNorms, setExpandedNorms] = useState<Set<string>>(new Set());
+  const [generatingSummaryId, setGeneratingSummaryId] = useState<string | null>(null);
+
+  const handleGenerateSummary = async (normId: string) => {
+    setGeneratingSummaryId(normId);
+    try {
+      await generateNormSummaryServer(normId);
+      toast.success('Resumo gerado com sucesso!');
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao gerar resumo');
+    } finally {
+      setGeneratingSummaryId(null);
+    }
+  };
 
   const toggleExpanded = (normId: string) => {
     setExpandedNorms(prev => {
@@ -87,17 +103,19 @@ function NormDisplay({
       {norms.map((norm, index) => (
         <motion.div
           key={norm.id}
-          initial={{ opacity: 0, transform: 'translateY(10px)' }}
-          animate={{ opacity: 1, transform: 'translateY(0px)' }}
+          layout
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{
-            delay: Math.min(index * 0.03, 0.5), // Limitar delay máximo a 0.5s para listas grandes
             duration: 0.2,
             ease: 'easeOut'
           }}
-          className="bg-white border border-zinc-100 rounded-2xl p-6 hover:shadow-md transition-all group will-change-transform gpu-accelerated"
+          className="p-0 hover:shadow-md transition-all group will-change-transform gpu-accelerated"
         >
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-3 flex-1">
+          <div className="w-full">
+            <div className="bg-white border border-zinc-100 rounded-2xl p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-3 flex-1">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-bold text-orange-700 tracking-wide uppercase">
                   {norm.code}
@@ -110,7 +128,7 @@ function NormDisplay({
                 {norm.title}
               </h3>
               <p className="text-zinc-500 text-sm leading-relaxed">
-                {norm.description}
+                {norm.summary || norm.description}
               </p>
               
               {/* Mostrar reasoning apenas quando houver pesquisa */}
@@ -164,12 +182,33 @@ function NormDisplay({
               )}
               
               <div className="pt-4 flex items-center justify-between">
-                <Link 
-                  href={`/norm_detail/${encodeURIComponent(norm.id)}`}
-                  className="inline-flex items-center gap-2 text-sm font-bold text-zinc-900 hover:gap-3 transition-all"
-                >
-                  Ler mais <ArrowRight className="w-4 h-4" />
-                </Link>
+                <div className="flex items-center gap-4">
+                  <Link 
+                    href={`/norm_detail/${encodeURIComponent(norm.id)}`}
+                    className="inline-flex items-center gap-2 text-sm font-bold text-zinc-900 hover:gap-3 transition-all"
+                  >
+                    Ler mais <ArrowRight className="w-4 h-4" />
+                  </Link>
+
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleGenerateSummary(norm.id);
+                      }}
+                      disabled={generatingSummaryId === norm.id}
+                      className="inline-flex items-center gap-2 text-sm font-bold text-amber-600 hover:text-amber-700 transition-all disabled:opacity-50"
+                      title="Gerar Resumo Manualmente"
+                    >
+                      {generatingSummaryId === norm.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Wand2 className="w-4 h-4" />
+                      )}
+                      Resumir
+                    </button>
+                  )}
+                </div>
 
                 {isAdmin && (
                   <div className="flex items-center gap-2">
@@ -193,9 +232,11 @@ function NormDisplay({
                   </div>
                 )}
               </div>
-            </div>
-            <div className="hidden sm:block">
-              <ChevronDown className="w-5 h-5 text-zinc-300 group-hover:text-zinc-900 transition-colors mt-1" />
+                </div>
+                <div className="hidden sm:block">
+                  <ChevronDown className="w-5 h-5 text-zinc-300 group-hover:text-zinc-900 transition-colors mt-1" />
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>

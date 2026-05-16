@@ -142,21 +142,20 @@ export async function GET() {
         totalCount: normsCount,
         sampleCount: norms?.length,
         samples: norms || [],
-        error: normsError,
+        error: normsError ? 'Erro' : null,
       },
       activeCountries: {
         list: activeCountriesData,
-        error: activeCountriesError,
+        error: activeCountriesError ? 'Erro' : null,
       },
-      countriesError: countriesError,
-      categoriesError: categoriesError,
+      countriesError: countriesError ? 'Erro' : null,
+      categoriesError: categoriesError ? 'Erro' : null,
     });
   } catch (error: unknown) {
-    const err = error as Error;
-    console.error('[test-supabase] Exception:', err?.message);
+    console.error('[test-supabase] Ocorreu um erro interno');
     return Response.json({
       ok: false,
-      error: err?.message,
+      error: 'Erro interno no servidor',
     }, { status: 500 });
   }
 }

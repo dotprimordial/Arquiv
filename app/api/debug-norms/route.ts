@@ -110,38 +110,37 @@ export async function GET(_request: Request) {
         countries: {
           total: countries?.length || 0,
           list: countries?.map(c => ({ id: c.id, name: c.name })) || [],
-          error: countriesError?.message
+          error: countriesError ? 'Erro' : null
         },
         categories: {
           total: categories?.length || 0,
           list: categories?.map(c => ({ id: c.id, name: c.name })) || [],
-          error: categoriesError?.message
+          error: categoriesError ? 'Erro' : null
         },
         norms: {
           total: normsCount,
           withCountryId: normsWithCountry?.length || 0,
           withoutCountryId: normsNoCountry?.length || 0,
           samplesWithCountry: normsWithCountry?.map(n => ({ code: n.code, country_id: n.country_id })) || [],
-          error: normsWithCountryError?.message || normsNoCountryError?.message
+          error: (normsWithCountryError || normsNoCountryError) ? 'Erro' : null
         },
         activeCountries: {
           count: activeCountries.size,
           list: Array.from(activeCountries),
-          error: activeCountriesError?.message
+          error: activeCountriesError ? 'Erro' : null
         },
         normsForFirstCountry: {
           country: firstCountry?.name,
           count: normsForCountryData.length,
-          error: normsForCountryError?.message
+          error: normsForCountryError ? 'Erro' : null
         }
       }
     });
   } catch (error: unknown) {
-    const err = error as Error;
-    console.error('[debug-norms] Exception:', err?.message, err?.stack);
+    console.error('[debug-norms] Ocorreu um erro na API de diagnóstico');
     return Response.json({
       status: 'error',
-      error: err?.message
+      error: 'Erro interno no servidor'
     }, { status: 500 });
   }
 }

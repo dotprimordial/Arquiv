@@ -12,7 +12,10 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+      return cache.addAll(STATIC_ASSETS).catch((error) => {
+        console.error('[Service Worker] Erro ao cachear assets:', error);
+        // Continuar mesmo se falhar - não deve impedir a instalação
+      });
     })
   );
   self.skipWaiting();
@@ -35,9 +38,15 @@ self.addEventListener('activate', (event) => {
 // Interceptação de fetch
 self.addEventListener('fetch', (event) => {
   // Ignorar requisições de API e autenticação
-  if (event.request.url.includes('/api/') || 
+  if (event.request.url.includes('/api/') ||
       event.request.url.includes('/auth/') ||
       event.request.method !== 'GET') {
+    return;
+  }
+
+  // Ignorar requisições de domínios de terceiros (scripts de anúncios, etc.)
+  const url = new URL(event.request.url);
+  if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1' && !url.hostname.includes('arquiv.org')) {
     return;
   }
 

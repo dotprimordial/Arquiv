@@ -6,8 +6,7 @@ import { FileText, AlertCircle, Loader2, ArrowLeft, Upload, File } from 'lucide-
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { extractDocumentStructure } from '@/lib/gemini';
-import { processAndUploadNorm } from '@/app/actions/norm-actions';
+import { processAndUploadNorm, analyzeDocumentStructureServer } from '@/app/actions/norm-actions';
 import Link from 'next/link';
 import nextDynamic from 'next/dynamic';
 
@@ -70,16 +69,20 @@ export default function UploadPage() {
     setError(null);
     
     try {
-      const result = await extractDocumentStructure(content, title);
-      setAutoCategories(result.categories);
-      
-      // Se a categoria atual não estiver nas categorias sugeridas, usar a primeira sugerida
-      if (result.categories.length > 0 && !result.categories.includes(category)) {
-        setCategory(result.categories[0]);
+      const result = await analyzeDocumentStructureServer(content, title);
+      if (result && result.categories) {
+        setAutoCategories(result.categories);
+
+        // Se a categoria atual não estiver nas categorias sugeridas, usar a primeira sugerida
+        if (result.categories.length > 0 && !result.categories.includes(category)) {
+          setCategory(result.categories[0]);
+        }
+
+        // Atualizar o conteúdo com a versão estruturada
+        if (result.structuredContent) {
+          setNormContent(result.structuredContent);
+        }
       }
-      
-      // Atualizar o conteúdo com a versão estruturada
-      setNormContent(result.structuredContent);
       
     } catch (err) {
       console.error("Erro na análise:", err);
@@ -150,10 +153,12 @@ export default function UploadPage() {
       // Analisar o documento automaticamente
       if (extractedText.length > 100) {
         try {
-          const result = await extractDocumentStructure(extractedText, file.name.replace('.pdf', ''));
-          setAutoCategories(result.categories);
-          if (result.categories.length > 0 && category === 'Urbanismo') {
-            setCategory(result.categories[0]);
+          const result = await analyzeDocumentStructureServer(extractedText, file.name.replace('.pdf', ''));
+          if (result && result.categories) {
+            setAutoCategories(result.categories);
+            if (result.categories.length > 0 && category === 'Urbanismo') {
+              setCategory(result.categories[0]);
+            }
           }
         } catch (analyzeErr) {
           console.warn('[PDF Upload] Análise automática falhou:', analyzeErr);
@@ -255,10 +260,12 @@ export default function UploadPage() {
         try {
           // Remover tags HTML para análise
           const plainText = extractedText.replace(/<[^>]*>/g, '');
-          const result = await extractDocumentStructure(plainText, file.name.replace(/\.(docx|doc)$/i, ''));
-          setAutoCategories(result.categories);
-          if (result.categories.length > 0 && category === 'Urbanismo') {
-            setCategory(result.categories[0]);
+          const result = await analyzeDocumentStructureServer(plainText, file.name.replace(/\.(docx|doc)$/i, ''));
+          if (result && result.categories) {
+            setAutoCategories(result.categories);
+            if (result.categories.length > 0 && category === 'Urbanismo') {
+              setCategory(result.categories[0]);
+            }
           }
         } catch (analyzeErr) {
           console.warn('[DOCX Upload] Análise automática falhou:', analyzeErr);
@@ -334,12 +341,16 @@ export default function UploadPage() {
 
       console.log('Norma processada com sucesso:', result);
       toast.success('Norma processada com sucesso!', {
-        description: `Seções: ${result.sectionsCreated} | Embeddings: ${result.embeddingsGenerated}`,
+        description: `Seções: ${result?.sectionsCreated ?? 0} | Embeddings: ${result?.embeddingsGenerated ?? 0}`,
       });
 
       router.push('/');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Erro ao salvar norma. Por favor tente novamente.');
+      const msg = err instanceof Error ? err.message : 'Erro ao salvar norma. Por favor tente novamente.';
+      setError(msg);
+      toast.error('Erro ao salvar norma', {
+        description: msg,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -419,8 +430,7 @@ export default function UploadPage() {
     'align',
     'list', 'indent',
     'blockquote', 'code-block',
-    'link', 'image', 'video',
-    'clean'
+    'link', 'image', 'video'
   ];
 
   if (isCheckingAuth) {

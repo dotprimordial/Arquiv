@@ -4,7 +4,7 @@ import NodeCache from 'node-cache';
  * Cache system for API responses
  * Two tiers:
  * - searchCache: 5 min TTL for search queries (semantic, textual)
- * - staticCache: 10 min TTL for static data (countries, categories, norms)
+ * - staticCache: 1 hour TTL for static data (countries, categories, norms)
  */
 
 // Cache for search queries (5 minutes)
@@ -14,10 +14,10 @@ export const searchCache = new NodeCache({
   useClones: false, // don't clone objects (better performance, but be careful with mutations)
 });
 
-// Cache for static data (10 minutes)
+// Cache for static data (1 hour)
 export const staticCache = new NodeCache({
-  stdTTL: 600,      // 10 minutes
-  checkperiod: 120,
+  stdTTL: 3600,     // 1 hour
+  checkperiod: 300,
   useClones: false,
 });
 
