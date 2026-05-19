@@ -6,17 +6,17 @@
   <p>Busca inteligente, pesquise pela situação e receba a norma ideal para tal</p>
 </div>
 
-## ✨ Features
+## Features
 
-- 🔍 **Busca Semântica IA**: Busca inteligente usando OpenRouter AI para encontrar normas relevantes
-- 📄 **Suporte PDF**: Upload e visualização de documentos PDF diretamente na plataforma
-- 🌍 **Multi-País**: Suporte para normas de diferentes países (Portugal, Brasil, Moçambique, Angola, etc.)
-- 👤 **Autenticação**: Sistema de login opcional com recursos admin
-- 📱 **Responsivo**: Design moderno e adaptável para todos os dispositivos
-- 🔗 **Compartilhamento**: Compartilhe normas em redes sociais
-- 💾 **Organização**: Estrutura de pastas por país no storage
+- **Busca Semântica IA**: Busca inteligente usando OpenRouter AI para encontrar normas relevantes
+- **Suporte PDF**: Upload e visualização de documentos PDF diretamente na plataforma
+- **Multi-País**: Suporte para normas de diferentes países (Portugal, Brasil, Moçambique, Angola, etc.)
+- **Autenticação**: Sistema de login opcional com recursos admin
+- **Responsivo**: Design moderno e adaptável para todos os dispositivos
+- **Compartilhamento**: Compartilhe normas em redes sociais
+- **Organização**: Estrutura de pastas por país no storage
 
-## 🚀 Tecnologias
+## Tecnologias
 
 - **Frontend**: Next.js 14, React, TypeScript
 - **Estilos**: Tailwind CSS, Framer Motion
@@ -25,13 +25,13 @@
 - **PDF**: Visualizador nativo com iframe
 - **Ícones**: Lucide React
 
-## 📋 Pré-requisitos
+## Pré-requisitos
 
 - Node.js 18+
 - Conta Supabase
 - Chave API OpenRouter
 
-## 🛠️ Instalação
+## Instalação
 
 1. **Clone o repositório**
    ```bash
@@ -77,7 +77,7 @@
 
    Abra [http://localhost:3000](http://localhost:3000) no navegador.
 
-## 📁 Estrutura do Projeto
+## Estrutura do Projeto
 
 ```
 arquiv/
@@ -100,7 +100,7 @@ arquiv/
 └── public/
 ```
 
-## 🎯 Funcionalidades Principais
+## Funcionalidades Principais
 
 ### Busca de Normas
 - Busca semântica usando IA
@@ -141,7 +141,7 @@ CREATE TABLE norms (
 - Estrutura: `{pais}/{timestamp}-{nome-arquivo.pdf}`
 - Exemplos: `mocambique/1234567890-regeu.pdf`
 
-## 🤝 Contribuindo
+## Contribuindo
 
 1. Fork o projeto
 2. Crie uma branch (`git checkout -b feature/nova-funcionalidade`)
@@ -149,11 +149,11 @@ CREATE TABLE norms (
 4. Push para a branch (`git push origin feature/nova-funcionalidade`)
 5. Abra um Pull Request
 
-## 📝 Licença
+## Licença
 
 Este projeto está sob licença MIT. Veja o arquivo [LICENSE](LICENSE) para detalhes.
 
-## 🆘 Suporte
+## Suporte
 
 Para suporte, envie um email para seantomasytbr@gmail.com ou abra uma issue no GitHub.
 
