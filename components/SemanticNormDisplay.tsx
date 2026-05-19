@@ -216,31 +216,61 @@ function SemanticNormDisplay({
                 >
                   {/* Hierarquia Completa */}
                   <div className="space-y-2 mb-3">
-                    {group.sections[0].chapter && (
+                    {group.sections[0].titulo && (
                       <div className="flex items-center gap-2 text-xs">
                         <BookOpen className="w-4 h-4 text-orange-500" />
-                        <span className="font-semibold text-orange-600 uppercase tracking-wide">
-                          Capítulo
-                        </span>
-                        <span className="font-medium text-zinc-700">
-                          {group.sections[0].chapter}
-                        </span>
+                        <span className="font-semibold text-orange-600 uppercase tracking-wide">Título:</span>
+                        <span className="font-medium text-zinc-700">{group.sections[0].titulo}</span>
                       </div>
                     )}
-                    {group.sections[0].article && (
+                    {group.sections[0].capitulo && (
+                      <div className="flex items-center gap-2 text-xs pl-2">
+                        <span className="w-1.5 h-1.5 bg-orange-300 rounded-full" />
+                        <span className="font-semibold text-orange-600 uppercase">Capítulo:</span>
+                        <span className="font-medium text-zinc-700">{group.sections[0].capitulo}</span>
+                      </div>
+                    )}
+                    {group.sections[0].seccao && (
+                      <div className="flex items-center gap-2 text-xs pl-4">
+                        <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full" />
+                        <span className="font-semibold text-zinc-600 uppercase">Secção:</span>
+                        <span className="font-medium text-zinc-700">{group.sections[0].seccao}</span>
+                      </div>
+                    )}
+                    {group.sections[0].subseccao && (
                       <div className="flex items-center gap-2 text-xs pl-6">
-                        <span className="w-2 h-2 bg-zinc-400 rounded-full" />
-                        <span className="font-semibold text-blue-600 uppercase">
-                          {group.sections[0].article}
-                        </span>
+                        <span className="w-1.5 h-1.5 bg-zinc-300 rounded-full" />
+                        <span className="font-semibold text-zinc-500 uppercase">Subsecção:</span>
+                        <span className="font-medium text-zinc-600">{group.sections[0].subseccao}</span>
                       </div>
                     )}
-                    {group.sections[0].paragraph && (
+                    {group.sections[0].artigo && (
+                      <div className="flex items-center gap-2 text-xs pl-8">
+                        <span className="w-2 h-2 bg-blue-400 rounded-full" />
+                        <span className="font-bold text-blue-600 uppercase">{group.sections[0].artigo}</span>
+                      </div>
+                    )}
+                    {group.sections[0].paragrafo && (
                       <div className="flex items-center gap-2 text-xs pl-12">
-                        <span className="w-1.5 h-1.5 bg-zinc-300 rounded-full" />
-                        <span className="font-medium text-zinc-500">
-                          {group.sections[0].paragraph}
-                        </span>
+                        <span className="font-medium text-zinc-500">{group.sections[0].paragrafo}</span>
+                      </div>
+                    )}
+                    {group.sections[0].inciso && (
+                      <div className="flex items-center gap-2 text-xs pl-16">
+                        <span className="text-zinc-400">↳</span>
+                        <span className="font-medium text-zinc-600">{group.sections[0].inciso}</span>
+                      </div>
+                    )}
+                    {group.sections[0].alinea && (
+                      <div className="flex items-center gap-2 text-xs pl-20">
+                        <span className="text-zinc-400">↳</span>
+                        <span className="italic text-zinc-500">{group.sections[0].alinea}</span>
+                      </div>
+                    )}
+                    {group.sections[0].item && (
+                      <div className="flex items-center gap-2 text-xs pl-24">
+                        <span className="text-zinc-300">•</span>
+                        <span className="text-zinc-500">{group.sections[0].item}</span>
                       </div>
                     )}
                   </div>
@@ -309,15 +339,25 @@ function SemanticNormDisplay({
                           >
                             {/* Hierarquia */}
                             <div className="space-y-1 mb-3">
-                              {section.chapter && (
+                              {section.titulo && (
                                 <div className="flex items-center gap-2 text-xs">
                                   <BookOpen className="w-3 h-3 text-orange-500" />
-                                  <span className="text-zinc-600">{section.chapter}</span>
+                                  <span className="text-zinc-600 font-semibold">Título: {section.titulo}</span>
                                 </div>
                               )}
-                              {section.article && (
-                                <div className="flex items-center gap-2 text-xs pl-5">
-                                  <span className="font-medium text-blue-600">{section.article}</span>
+                              {section.capitulo && (
+                                <div className="flex items-center gap-2 text-xs pl-3">
+                                  <span className="text-zinc-500">Capítulo: {section.capitulo}</span>
+                                </div>
+                              )}
+                              {section.seccao && (
+                                <div className="flex items-center gap-2 text-xs pl-6">
+                                  <span className="text-zinc-500">Secção: {section.seccao}</span>
+                                </div>
+                              )}
+                              {section.artigo && (
+                                <div className="flex items-center gap-2 text-xs pl-9">
+                                  <span className="font-bold text-blue-600">{section.artigo}</span>
                                 </div>
                               )}
                             </div>

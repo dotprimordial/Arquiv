@@ -39,6 +39,12 @@ const nextConfig = {
         port: '',
         pathname: '/**', // This allows any path under the hostname
       },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        port: '',
+        pathname: '/**',
+      },
       // Note: removed permissive googleusercontent pattern to reduce remote image surface
     ],
   },

@@ -93,7 +93,7 @@ export function generateSearchCacheKey(
   limit?: number
 ): string {
   const normalizedQuery = query.toLowerCase().trim();
-  return `${type}:${normalizedQuery}:${country || 'all'}:${category || 'all'}:${limit || 10}`;
+  return `v7:${type}:${normalizedQuery}:${country || 'all'}:${category || 'all'}:${limit || 10}`;
 }
 
 /**

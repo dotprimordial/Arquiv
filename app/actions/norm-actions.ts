@@ -387,10 +387,6 @@ INSTRUÇÕES:
       console.warn('[processAndUploadNorm] SEO indexing failed (non-critical):', err.message);
     });
 
-    if (isAdmin) {
-      console.log('[processAndUploadNorm] Admin check passed');
-    }
-
     console.log(`[processAndUploadNorm] === SUCESSO ===`);
 
     return {
@@ -419,10 +415,15 @@ export interface SearchResult {
   regulationNumber?: string;
   excerpt?: string;
   // Estrutura hierárquica do trecho
-  chapter?: string;
-  article?: string;
-  paragraph?: string;
-  section?: string;
+  titulo?: string;
+  capitulo?: string;
+  seccao?: string;
+  subseccao?: string;
+  artigo?: string;
+  paragrafo?: string;
+  inciso?: string;
+  alinea?: string;
+  item?: string;
 }
 
 export interface GroupedSearchResult {
@@ -496,8 +497,71 @@ function cleanHtmlFormatting(text: string): string {
     .trim();
 }
 
-  // Extract a concise snippet around the query terms from a larger content string
-  function extractBestSnippet(content: string, query: string, maxLen: number = 400): string {
+/**
+ * Snippets from extractBestSnippet are often wrapped with "..." at the start/end;
+ * those ellipsis markers are not in the source document, so indexOf would fail
+ * and chapter/article inference would break.
+ */
+function stripSnippetEllipsis(text: string): string {
+  return text
+    .replace(/^\s*\.{2,}\s*/u, '')
+    .replace(/\s*\.{2,}\s*$/u, '')
+    .trim();
+}
+
+type HierarchyFields = {
+  titulo?: string;
+  capitulo?: string;
+  seccao?: string;
+  subseccao?: string;
+  artigo?: string;
+  paragrafo?: string;
+  inciso?: string;
+  alinea?: string;
+  item?: string;
+};
+
+function hasHierarchyFields(h: HierarchyFields): boolean {
+  return !!(
+    h.titulo ||
+    h.capitulo ||
+    h.seccao ||
+    h.subseccao ||
+    h.artigo ||
+    h.paragrafo ||
+    h.inciso ||
+    h.alinea ||
+    h.item
+  );
+}
+
+/** When the excerpt itself contains headings (common in AI quotes), take the last match — heading usually precedes the quoted body. */
+function extractHierarchyFromExcerptMarkers(text: string): HierarchyFields {
+  const out: HierarchyFields = {};
+  if (!text) return out;
+
+  const findLast = (regex: RegExp) => {
+    const matches = Array.from(text.matchAll(regex));
+    return matches.length > 0 ? matches[matches.length - 1][0].trim() : undefined;
+  };
+
+  out.titulo = findLast(/(?:T[ÍI]TULO|Título|Titulo)\s+(?:[IVXLCivxlc]+|\d+(?:º|ª)?)/gi);
+  out.capitulo = findLast(
+    /(?:CAP[ÍI]TULO|CAPITULO|Cap[íi]tulo|Capitulo|CAP\.?)\s+(?:[IVXLCivxlc]+|\d+(?:º|ª)?)/gi
+  );
+  out.seccao = findLast(/(?:SEC[ÇC][ÃA]O|Sec[çc][ãa]o|SEÇÃO|Seção|SEC\.?)\s+(?:[IVXLCivxlc]+|\d+(?:º|ª)?)/gi);
+  out.subseccao = findLast(/(?:SUBSEC[ÇC][ÃA]O|Subsec[çc][ãa]o|SUBSEÇÃO|Subseção)\s+(?:[IVXLCivxlc]+|\d+(?:º|ª)?)/gi);
+  out.artigo = findLast(/(?:Art\.?\s*º?\s*|Artigo|ART\.?)\s*(?:nº|n°)?\s*\d+(?:º|ª)?/gi);
+  out.paragrafo = findLast(/(?:§|Par[áa]grafo|Paragraph)\s+(?:\d+(?:º|ª)?|único|única)/gi);
+  out.inciso = findLast(/(?:Inciso|INCISO)\s+(?:[IVXLCivxlc]+|\d+)/gi);
+  out.alinea = findLast(/(?:Al[íi]nea|AL[ÍI]NEA|ALINEA)\s+[a-z](?:\)|$|\s)/gi);
+  out.item = findLast(/(?:Item|ITEM)\s+\d+/gi);
+
+  return out;
+}
+
+// Extract a concise snippet around the query terms from a larger content string
+function extractBestSnippet(content: string, query: string, maxLen: number = 400): string {
     const clean = cleanHtmlFormatting(content || '');
     if (!clean) return '';
 
@@ -544,71 +608,122 @@ function cleanHtmlFormatting(text: string): string {
   }
 
 // Helper to find chapter/article in the text BEFORE a specific excerpt
-function findHierarchyBeforeExcerpt(excerpt: string, fullText: string, contextSize: number = 5000): { chapter?: string; article?: string; paragraph?: string } {
-  const out: { chapter?: string; article?: string; paragraph?: string } = {};
+function findHierarchyBeforeExcerpt(excerpt: string, fullText: string, contextSize: number = 5000): { 
+  titulo?: string;
+  capitulo?: string;
+  seccao?: string;
+  subseccao?: string;
+  artigo?: string;
+  paragrafo?: string;
+  inciso?: string;
+  alinea?: string;
+  item?: string;
+} {
+  const out: { 
+    titulo?: string;
+    capitulo?: string;
+    seccao?: string;
+    subseccao?: string;
+    artigo?: string;
+    paragrafo?: string;
+    inciso?: string;
+    alinea?: string;
+    item?: string;
+  } = {};
 
-  if (!fullText || !excerpt) return out;
+  let ex = stripSnippetEllipsis(cleanHtmlFormatting(excerpt || ''));
+  let doc = cleanHtmlFormatting(fullText || '');
+  if (!doc || !ex) return out;
 
-  // Try to find the excerpt in the full text
-  let excerptStart = fullText.indexOf(excerpt);
-  
-  // If exact match not found, try with normalized whitespace
+  /**
+   * Resolve excerpt position and the document string to slice for "context before".
+   * Critical: if we match on whitespace-normalized text, we must slice that same string —
+   * using normalized indices against the non-normalized fullText was breaking hierarchy detection.
+   */
+  let excerptStart = doc.indexOf(ex);
   if (excerptStart === -1) {
-    const normalizedExcerpt = excerpt.replace(/\s+/g, ' ').trim();
-    const normalizedFullText = fullText.replace(/\s+/g, ' ');
-    excerptStart = normalizedFullText.indexOf(normalizedExcerpt);
-    
-    // If still not found, try to find first few words of excerpt
-    if (excerptStart === -1) {
-      const firstWords = normalizedExcerpt.split(' ').slice(0, 5).join(' ');
-      excerptStart = normalizedFullText.indexOf(firstWords);
+    excerptStart = doc.toLowerCase().indexOf(ex.toLowerCase());
+  }
+
+  const normEx = ex.replace(/\s+/g, ' ').trim();
+  const normDoc = doc.replace(/\s+/g, ' ');
+  if (excerptStart === -1 && normEx.length > 0) {
+    const idx = normDoc.indexOf(normEx);
+    if (idx !== -1) {
+      doc = normDoc;
+      excerptStart = idx;
     }
   }
-  
-  // If we still can't find it, try to find a long enough substring
+
+  if (excerptStart === -1 && normEx.length > 0) {
+    const firstWords = normEx.split(' ').slice(0, 12).join(' ');
+    if (firstWords.length >= 8) {
+      const idx = normDoc.indexOf(firstWords);
+      if (idx !== -1) {
+        doc = normDoc;
+        excerptStart = idx;
+      }
+    }
+  }
+
+  // Prefix fuzzy match: AI/snippets often differ slightly from DB text; ellipsis was already stripped.
+  if (excerptStart === -1 && normEx.length >= 16) {
+    const lengths = [Math.min(220, normEx.length), 180, 140, 100, 72, 48];
+    for (const len of lengths) {
+      const sub = normEx.slice(0, len);
+      if (sub.length < 10) continue;
+      let idx = normDoc.indexOf(sub);
+      if (idx === -1) idx = normDoc.toLowerCase().indexOf(sub.toLowerCase());
+      if (idx !== -1) {
+        doc = normDoc;
+        excerptStart = idx;
+        console.log(`[findHierarchyBeforeExcerpt] Fuzzy prefix match (len=${len})`);
+        break;
+      }
+    }
+  }
+
   if (excerptStart === -1) {
-    const middlePart = excerpt.substring(Math.floor(excerpt.length / 4), Math.floor(excerpt.length * 3 / 4)).trim();
-    if (middlePart.length > 20) {
-      excerptStart = fullText.indexOf(middlePart);
+    const articleMatch = ex.match(/(?:Art\.?|Artigo|ART\.?)\s*(?:nº|n°)?\s*(\d+)/i);
+    if (articleMatch?.[1]) {
+      const artNum = articleMatch[1];
+      const artRegex = new RegExp(`(?:Art\\.?|Artigo|ART\\.?)\\s*(?:nº|n°)?\\s*${artNum}(?:º|ª)?`, 'i');
+      for (const d of [doc, normDoc]) {
+        const artMatch = d.match(artRegex);
+        if (artMatch && artMatch.index !== undefined) {
+          doc = d;
+          excerptStart = artMatch.index;
+          console.log(`[findHierarchyBeforeExcerpt] Found article ${artNum} by number fallback at index ${excerptStart}`);
+          break;
+        }
+      }
     }
   }
 
   if (excerptStart === -1) {
     return out;
   }
-  
-  // Get context BEFORE the excerpt
-  const contextStart = Math.max(0, excerptStart - contextSize);
-  const contextBefore = fullText.substring(contextStart, excerptStart);
-  
-  // Find LAST chapter in context before excerpt
-  const allChapterMatches = Array.from(
-    contextBefore.matchAll(
-      /(?:CAPÍTULO|Capítulo|CAP\.?|SEÇÃO|Seçã?o|SE[CÇ][ÃA]O|Seção|SEÇÃO|Chapter|CHAPTER)\s+(?:[IVXLCivxlc]+|\d+(?:º)?|\d+)/gi
-    )
+
+  const contextBefore = doc.substring(0, excerptStart);
+
+  const findLastMatch = (regex: RegExp) => {
+    const matches = Array.from(contextBefore.matchAll(regex));
+    return matches.length > 0 ? matches[matches.length - 1][0].trim() : undefined;
+  };
+
+  out.titulo = findLastMatch(/(?:T[ÍI]TULO|Título|Titulo)\s+(?:[IVXLCivxlc]+|\d+(?:º|ª)?)/gi);
+  out.capitulo = findLastMatch(
+    /(?:CAP[ÍI]TULO|CAPITULO|Cap[íi]tulo|Capitulo|CAP\.?)\s+(?:[IVXLCivxlc]+|\d+(?:º|ª)?)/gi
   );
-  if (allChapterMatches.length > 0) {
-    out.chapter = allChapterMatches[allChapterMatches.length - 1][0].trim();
-  }
-  
-  // Find LAST article in context before excerpt
-  const allArticleMatches = Array.from(
-    contextBefore.matchAll(/(?:Art\.?|Artigo|ART|Article|ARTICLE)\s+(?:nº|n°)?\s*\d+(?:º|ª)?(?:\s*[-–—]\s*[A-Za-z])?/gi)
-  );
-  if (allArticleMatches.length > 0) {
-    out.article = allArticleMatches[allArticleMatches.length - 1][0].trim();
-  }
-  
-  // Find LAST paragraph in context before excerpt
-  const allParagraphMatches = Array.from(
-    contextBefore.matchAll(
-      /(?:§|Parágrafo|Párrafo|Par\.?|Paragraph|PARAGRAPH)\s+(?:nº|n°)?\s*(?:único|única|\d+(?:º)?)|(?:Inciso|INCISO|Alínea|ALINEA)\s+[A-Za-z0-9]+/gi
-    )
-  );
-  if (allParagraphMatches.length > 0) {
-    out.paragraph = allParagraphMatches[allParagraphMatches.length - 1][0].trim();
-  }
-  
+  out.seccao = findLastMatch(/(?:SEC[ÇC][ÃA]O|Sec[çc][ãa]o|SEÇÃO|Seção|SEC\.?)\s+(?:[IVXLCivxlc]+|\d+(?:º|ª)?)/gi);
+  out.subseccao = findLastMatch(/(?:SUBSEC[ÇC][ÃA]O|Subsec[çc][ãa]o|SUBSEÇÃO|Subseção)\s+(?:[IVXLCivxlc]+|\d+(?:º|ª)?)/gi);
+  out.artigo = findLastMatch(/(?:Art\.?|Artigo|ART\.?)\s*(?:nº|n°)?\s*\d+(?:º|ª)?/gi);
+  out.paragrafo = findLastMatch(/(?:§|Par[áa]grafo|Paragraph)\s+(?:\d+(?:º|ª)?|único|única)/gi);
+  out.inciso = findLastMatch(/(?:Inciso|INCISO)\s+(?:[IVXLCivxlc]+|\d+)/gi);
+  out.alinea = findLastMatch(/(?:Al[íi]nea|AL[ÍI]NEA|ALINEA)\s+[a-z](?:\)|$|\s)/gi);
+  out.item = findLastMatch(/(?:Item|ITEM)\s+\d+/gi);
+
+  void contextSize;
   return out;
 }
 
@@ -622,62 +737,36 @@ function findContextBeforeExcerpt(excerpt: string, fullText: string, contextChar
 }
 
 // Top-level helper to infer chapter/article/paragraph from a text snippet or full document
-function parseHierarchyFromText(excerpt: string, fullText?: string) {
-  const out: { chapter?: string; article?: string; paragraph?: string } = {};
+function parseHierarchyFromText(excerpt: string, fullText?: string): HierarchyFields {
+  const cleanExcerpt = stripSnippetEllipsis(cleanHtmlFormatting(excerpt || ''));
+  const cleanFull = fullText ? cleanHtmlFormatting(fullText) : '';
 
   console.log('[parseHierarchyFromText] Starting:', {
-    excerptLength: excerpt?.length,
-    fullTextLength: fullText?.length,
-    hasFullText: !!fullText,
+    excerptLength: cleanExcerpt?.length,
+    fullTextLength: cleanFull?.length,
+    hasFullText: !!cleanFull,
   });
 
-  // If we have full text, use the context-aware search
-  if (fullText && fullText.length > 0) {
-    const hierarchyFromContext = findHierarchyBeforeExcerpt(excerpt, fullText, 5000);
+  if (cleanFull.length > 0) {
+    const hierarchyFromContext = findHierarchyBeforeExcerpt(cleanExcerpt, cleanFull, 5000);
     console.log('[parseHierarchyFromText] Result from context search:', hierarchyFromContext);
-    
-    if (hierarchyFromContext.chapter || hierarchyFromContext.article || hierarchyFromContext.paragraph) {
+
+    if (hasHierarchyFields(hierarchyFromContext)) {
       console.log('[parseHierarchyFromText] Returning context-based hierarchy');
       return hierarchyFromContext;
     }
-    
-    // If context search failed, don't use full document fallback as it's often wrong
-    // Instead, fall through to search within the excerpt itself
-    console.log('[parseHierarchyFromText] Context search empty, falling through to excerpt search...');
+
+    console.log('[parseHierarchyFromText] Context search empty, trying excerpt markers...');
   }
 
-  // Helper to extract value safely
-  const extractValue = (regex: RegExp, text: string): string | undefined => {
-    const match = text.match(regex);
-    return match ? match[0].trim() : undefined;
-  };
+  const fromMarkers = extractHierarchyFromExcerptMarkers(cleanExcerpt);
+  if (hasHierarchyFields(fromMarkers)) {
+    console.log('[parseHierarchyFromText] Using excerpt-embedded markers');
+    return fromMarkers;
+  }
 
-  // Fallback: Search within the excerpt itself
-  console.log('[parseHierarchyFromText] Fallback to excerpt-only search');
-  
-  // CHAPTER patterns: "CAPÍTULO I", "Cap. 2", "SEÇÃO II", "Seção 3", etc.
-  let chapter = extractValue(
-    /(?:CAPÍTULO|Capítulo|CAP\.?|SEÇÃO|Seçã?o|SE[CÇ][ÃA]O|Seção|SEÇÃO|Chapter|CHAPTER)\s+(?:[IVXLCivxlc]+|\d+(?:º)?|\d+)/i,
-    excerpt
-  );
-  if (chapter) out.chapter = chapter;
-
-  // ARTICLE patterns: "Art. 5", "Art. 5º", "Artigo 5", "Artigo 10º", "Article 5", etc.
-  let article = extractValue(
-    /(?:Art\.?|Artigo|ART|Article|ARTICLE)\s+(?:nº|n°)?\s*\d+(?:º|ª)?(?:\s*[-–—]\s*[A-Za-z])?/i,
-    excerpt
-  );
-  if (article) out.article = article;
-
-  // PARAGRAPH patterns: "§ 1º", "Parágrafo único", "Parágrafo 2º", "Inciso I", "Alínea a", etc.
-  let paragraph = extractValue(
-    /(?:§|Parágrafo|Párrafo|Par\.?|Paragraph|PARAGRAPH)\s+(?:nº|n°)?\s*(?:único|única|\d+(?:º)?)|(?:Inciso|INCISO|Alínea|ALINEA)\s+[A-Za-z0-9]+/i,
-    excerpt
-  );
-  if (paragraph) out.paragraph = paragraph;
-
-  console.log('[parseHierarchyFromText] Final result:', out);
-  return out;
+  console.log('[parseHierarchyFromText] No hierarchy fields found');
+  return fromMarkers;
 }
 
 export async function searchNormsSemantic(
@@ -1027,21 +1116,15 @@ INSTRUÇÕES CRÍTICAS:
           excerpt = extractBestSnippet(normFull, cleanedQuery, 500);
         }
         
-        // NEVER trust AI values for hierarchy - ALWAYS parse from actual text
-        // The AI often returns fake values, so we always extract from the real excerpt/content
-        const contentText = String(norm.content || '');
+        const contentText = cleanHtmlFormatting(String(norm.content || ''));
         const hierarchy = parseHierarchyFromText(excerpt, contentText);
         
         console.log('[searchNormsSemantic] Hierarchy extraction:', {
           normId: String(norm.id).substring(0, 8),
-          hasChapter: !!hierarchy.chapter,
-          hasArticle: !!hierarchy.article,
-          hasParagraph: !!hierarchy.paragraph,
-          chapter: hierarchy.chapter?.substring(0, 30),
-          article: hierarchy.article?.substring(0, 30),
-          paragraph: hierarchy.paragraph?.substring(0, 30),
-          excerptLength: excerpt.length,
-          contentLength: contentText.length,
+          hasCapitulo: !!hierarchy.capitulo,
+          hasArtigo: !!hierarchy.artigo,
+          capitulo: hierarchy.capitulo?.substring(0, 30),
+          artigo: hierarchy.artigo?.substring(0, 30),
         });
         
         return {
@@ -1050,17 +1133,16 @@ INSTRUÇÕES CRÍTICAS:
           normCode: (norm.code as string) || '',
           normTitle: (norm.title as string) || '',
           normCountry: countryName,
-          sectionType: hierarchy.article ? 'artigo' : (hierarchy.chapter ? 'capitulo' : 'norma'),
-          sectionNumber: hierarchy.article || hierarchy.paragraph || null,
-          sectionTitle: hierarchy.chapter || null,
-          content: excerpt, // Sempre usar apenas o excerpt da IA
+          sectionType: hierarchy.artigo ? 'artigo' : (hierarchy.capitulo ? 'capitulo' : 'norma'),
+          sectionNumber: hierarchy.artigo || hierarchy.paragrafo || null,
+          sectionTitle: hierarchy.capitulo || null,
+          content: excerpt, 
           similarity: aiResult.relevanceScore || 0.5,
           decree: undefined,
           regulationNumber: undefined,
           excerpt: excerpt,
-          chapter: hierarchy.chapter || undefined,
-          article: hierarchy.article || undefined,
-          paragraph: hierarchy.paragraph || undefined,
+          // Spreading all hierarchy fields (titulo, capitulo, artigo, etc.)
+          ...hierarchy
         };
       })
       .filter((r) => r !== null);
