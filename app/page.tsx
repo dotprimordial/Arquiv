@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { LogIn, LogOut, Upload as UploadIcon, User, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
@@ -16,8 +16,17 @@ import { searchNormsSemantic, SearchResult, deleteNormServer } from '@/app/actio
 import { toast } from 'sonner';
 
 // Lazy load heavy components
-const SemanticNormDisplay = lazy(() => import('@/components/SemanticNormDisplay'));
-const AuthModal = lazy(() => import('@/components/AuthModal'));
+import dynamic from 'next/dynamic';
+import ErrorBoundary from '@/components/ErrorBoundary';
+const SemanticNormDisplay = dynamic(() => import('@/components/SemanticNormDisplay'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex justify-center py-12">
+      <div className="w-8 h-8 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin" />
+    </div>
+  ),
+});
+const AuthModal = dynamic(() => import('@/components/AuthModal'), { ssr: false, loading: () => null });
 
 // Categories array - defined outside component to prevent re-creation
 const CATEGORIES = [
@@ -43,6 +52,7 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAiSearchEnabled, setIsAiSearchEnabled] = useState(true); // Toggle busca IA
+  const [hasExceededLimit, setHasExceededLimit] = useState(false);
   const [norms, setNorms] = useState<Norm[] | null>(null);
   const [semanticResults, setSemanticResults] = useState<SearchResult[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -51,8 +61,12 @@ export default function Home() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalNormsCount, setTotalNormsCount] = useState(0);
   const pageSize = 10;
-
   const [user, setUser] = useState<SupabaseUser | null>(null);
+
+  useEffect(() => {
+    // Log visitor IP address on first page load
+    fetch('/api/log-ip', { method: 'POST' }).catch((err) => console.error('IP log error:', err));
+  }, []);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isRateLimitModalOpen, setIsRateLimitModalOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -133,6 +147,17 @@ export default function Home() {
     };
   }, []);
 
+  const handleLimitExceeded = useCallback(() => {
+    setHasExceededLimit(true);
+    setIsAiSearchEnabled(prev => {
+      if (prev) {
+        toast.error('Limite diário atingido. Mudando para busca normal.', { duration: 5000 });
+        return false;
+      }
+      return prev;
+    });
+  }, []);
+
   const fetchNorms = useCallback(async (country: string, category: string, query: string, useAi: boolean = false, page: number = 1) => {
     if (!country || country.trim() === '') {
       console.warn('[fetchNorms] País inválido ou não selecionado, cancelando busca.');
@@ -164,7 +189,19 @@ export default function Home() {
             setNorms(null);
           } catch (semanticErr) {
             console.error('Busca semântica falhou, usando busca tradicional:', semanticErr);
+            
+            // Check if it was a rate limit error
+            const errMsg = semanticErr instanceof Error ? semanticErr.message : String(semanticErr);
+            if (errMsg.includes('Limite')) {
+              setHasExceededLimit(true);
+              if (!user) {
+                // Optionally open modal or just let the toast do the job
+                // setIsRateLimitModalOpen(true);
+              }
+            }
+
             // Fallback automático para busca tradicional se semântica falhar
+            setIsAiSearchEnabled(false);
             const data = await getArchitecturalNorms(country, category, query, false, page, pageSize);
             setNorms(data.norms);
             setTotalNormsCount(data.totalCount);
@@ -188,10 +225,16 @@ export default function Home() {
       console.error('Erro na busca:', err);
       const msg = err instanceof Error ? err.message : String(err);
 
-      // Check if error is rate limit related for anonymous users
-      if (msg.includes('Limite') && !user) {
-        setError(null);
-        setIsRateLimitModalOpen(true);
+      // Check if error is rate limit related
+      if (msg.includes('Limite')) {
+        setHasExceededLimit(true);
+        setIsAiSearchEnabled(false);
+        if (!user) {
+          setError(null);
+          setIsRateLimitModalOpen(true);
+        } else {
+          setError(msg);
+        }
       } else {
         setError(msg.includes('API') ? 'Erro de conexão com o serviço de busca. Tente novamente.' : msg);
       }
@@ -303,7 +346,7 @@ export default function Home() {
             {user ? (
               <div className="flex items-center gap-3">
                 <div className="hidden sm:block">
-                  <SearchRateLimitDisplay compact={true} />
+                  <SearchRateLimitDisplay compact={true} onLimitExceeded={handleLimitExceeded} />
                 </div>
                 {isAdmin && (
                   <button
@@ -346,7 +389,7 @@ export default function Home() {
             ) : (
               <div className="flex items-center gap-3">
                 <div className="hidden sm:block">
-                  <SearchRateLimitDisplay compact={true} />
+                  <SearchRateLimitDisplay compact={true} onLimitExceeded={handleLimitExceeded} />
                 </div>
                 <button
                   onClick={() => setIsAuthModalOpen(true)}
@@ -401,7 +444,13 @@ export default function Home() {
             Busca Normal
           </span>
           <button
-            onClick={() => setIsAiSearchEnabled(!isAiSearchEnabled)}
+            onClick={() => {
+              if (!isAiSearchEnabled && hasExceededLimit) {
+                toast.error(user ? 'Limite de buscas diárias atingido. Tente novamente amanhã para usar a IA.' : 'Limite de buscas diárias atingido. Por favor, crie uma conta ou tente novamente amanhã para usar a IA.', { duration: 4000 });
+                return;
+              }
+              setIsAiSearchEnabled(!isAiSearchEnabled);
+            }}
             className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
               isAiSearchEnabled ? 'bg-emerald-500' : 'bg-zinc-300'
             }`}
@@ -440,17 +489,17 @@ export default function Home() {
 
       {/* Results */}
       {searchQuery.trim() !== '' && isAiSearchEnabled ? (
-        <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin"></div></div>}>
-          <SemanticNormDisplay
-            results={semanticResults}
-            isLoading={isLoading}
-            error={error}
-            countryName={selectedCountry?.name || ''}
-            countryCode={selectedCountry?.code || ''}
-            hasSearchQuery={searchQuery.trim() !== ''}
-            isAdmin={isAdmin}
-          />
-        </Suspense>
+        <ErrorBoundary>
+        <SemanticNormDisplay
+          results={semanticResults}
+          isLoading={isLoading}
+          error={error}
+          countryName={selectedCountry?.name || ''}
+          countryCode={selectedCountry?.code || ''}
+          hasSearchQuery={searchQuery.trim() !== ''}
+          isAdmin={isAdmin}
+        />
+      </ErrorBoundary>
       ) : (
         <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin"></div></div>}>
           <NormDisplay
@@ -525,12 +574,12 @@ export default function Home() {
       )}
 
       {/* Auth Modal */}
-      <Suspense fallback={null}>
+      <ErrorBoundary>
         <AuthModal
           isOpen={isAuthModalOpen}
           onClose={() => setIsAuthModalOpen(false)}
         />
-      </Suspense>
+      </ErrorBoundary>
 
       {/* Rate Limit Modal for Anonymous Users */}
       <RateLimitModal

@@ -143,7 +143,7 @@ function NormDisplay({
                 </div>
               )}
 
-              {/* Mostrar trechos apenas quando houver pesquisa */}
+              {/* Mostrar artigos apenas quando houver pesquisa */}
               {hasSearchQuery && norm.excerpt && (
                 <div className="mt-3 p-4 bg-blue-50 border border-blue-100 rounded-xl">
                   <div className="flex items-start gap-3">
@@ -151,7 +151,7 @@ function NormDisplay({
                       <BookOpen className="w-3 h-3 text-white" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-xs font-bold text-blue-900 mb-1">Trecho Relevante:</p>
+                      <p className="text-xs font-bold text-blue-900 mb-1">Artigo Relevante:</p>
                       <p className="text-sm text-blue-800 leading-relaxed italic">
                         &quot;{expandedNorms.has(norm.id) ? norm.excerpt : norm.excerpt.substring(0, 200) + (norm.excerpt.length > 200 ? '...' : '')}&quot;
                       </p>
@@ -168,7 +168,7 @@ function NormDisplay({
                           ) : (
                             <>
                               <ChevronDown className="w-3 h-3" />
-                              Ver mais trechos
+                              Ver mais artigos
                             </>
                           )}
                         </button>

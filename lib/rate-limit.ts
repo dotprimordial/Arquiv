@@ -3,7 +3,7 @@
  * Tracks and enforces per-user search quotas
  */
 
-import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from '@/lib/supabase-server';
+import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from './supabase-server';
 import crypto from 'crypto';
 
 export interface RateLimitConfig {
@@ -45,7 +45,7 @@ export async function checkRateLimit(
   userId?: string
 ): Promise<RateLimitResult> {
   try {
-    const supabase = await getAuthenticatedSupabaseClient();
+    const supabase = getAdminSupabaseClient();
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
@@ -54,20 +54,20 @@ export async function checkRateLimit(
     const dailyLimit = isAuth ? config.authenticatedSearchesPerDay : config.anonymousSearchesPerDay;
 
     // Build query based on authentication status
-    let query = supabase
+    let countQuery = supabase
       .from('search_usage')
-      .select('id', { count: 'exact' })
+      .select('id', { count: 'exact', head: true })
       .gte('searched_at', oneDayAgo.toISOString());
 
     if (isAuth && userId) {
-      // For authenticated users, check by user_id
-      query = query.eq('user_id', userId);
+      // Authenticated user – filter by user_id
+      countQuery = countQuery.eq('user_id', userId);
     } else {
-      // For anonymous users, check by IP
-      query = query.eq('ip_address', ipAddress);
+      // Anonymous user – filter by IP
+      countQuery = countQuery.eq('ip_address', ipAddress);
     }
 
-    const { data: daySearches, error: dayError } = await query.limit(dailyLimit + 1);
+    const { count: dayCount, error: dayError } = await countQuery;
 
     if (dayError && dayError.code !== 'PGRST200') {
       console.error('[checkRateLimit] Error fetching daily searches:', dayError);
@@ -75,10 +75,15 @@ export async function checkRateLimit(
       return { allowed: true, remaining: dailyLimit, limit: dailyLimit };
     }
 
-    const dayCount = daySearches?.length || 0;
+
+
+    console.log('[checkRateLimit] dayCount:', dayCount, 'dailyLimit:', dailyLimit, 'dayError:', dayError);
 
     // Check daily limit
-    if (dayCount >= dailyLimit) {
+    // Fallback dayCount to 0 if null
+    const safeDayCount = dayCount || 0;
+    
+    if (safeDayCount >= dailyLimit) {
       const resetTime = new Date(oneDayAgo.getTime() + 24 * 60 * 60 * 1000);
       return {
         allowed: false,

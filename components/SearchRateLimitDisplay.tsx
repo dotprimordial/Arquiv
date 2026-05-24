@@ -20,13 +20,14 @@ interface RateLimitStatus {
 }
 
 interface SearchRateLimitDisplayProps {
-  onLimitExceeded?: () => void;
+  onLimitExceeded?: (reason?: string) => void;
   compact?: boolean;
 }
 
 export function SearchRateLimitDisplay({ onLimitExceeded, compact = false }: SearchRateLimitDisplayProps) {
   const [status, setStatus] = useState<RateLimitStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -34,19 +35,27 @@ export function SearchRateLimitDisplay({ onLimitExceeded, compact = false }: Sea
         setLoading(true);
         const response = await fetch('/api/search/rate-limit');
         
+        // If response not ok, treat as no status (e.g., server unavailable)
         if (!response.ok) {
-          throw new Error('Erro ao buscar status de limite');
+          console.warn('[SearchRateLimitDisplay] Rate limit endpoint returned', response.status);
+          setStatus(null);
+          setError(null);
+          return;
         }
 
         const data: RateLimitStatus = await response.json();
         setStatus(data);
+        setError(null);
 
         if (!data.rateLimit.allowed && onLimitExceeded) {
-          onLimitExceeded();
+          onLimitExceeded(data.rateLimit.reason);
         }
       } catch (err) {
         const error = err as Error;
+        // Do not expose raw error to UI; log for debugging
         console.error('[SearchRateLimitDisplay] Error fetching rate limit:', error);
+        setError(null);
+        setStatus(null);
       } finally {
         setLoading(false);
       }
@@ -59,7 +68,17 @@ export function SearchRateLimitDisplay({ onLimitExceeded, compact = false }: Sea
     return () => clearInterval(interval);
   }, [onLimitExceeded]);
 
-  if (loading || !status) {
+  if (loading) {
+    return null;
+  }
+  if (error) {
+    return (
+      <div className="p-4 text-sm text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900 rounded">
+        Erro ao buscar status de limite: {error}
+      </div>
+    );
+  }
+  if (!status) {
     return null;
   }
 

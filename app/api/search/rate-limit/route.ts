@@ -1,4 +1,5 @@
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 import { checkRateLimit, getSearchStats } from '@/lib/rate-limit';
 import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
 
     // Check rate limit
     const rateLimitStatus = await checkRateLimit(clientIp, 'semantic', undefined, userId);
+
     
     // Get detailed stats
     const stats = await getSearchStats(clientIp);

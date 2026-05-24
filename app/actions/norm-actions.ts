@@ -414,7 +414,7 @@ export interface SearchResult {
   decree?: string;
   regulationNumber?: string;
   excerpt?: string;
-  // Estrutura hierárquica do trecho
+  // Estrutura hierárquica do artigo
   titulo?: string;
   capitulo?: string;
   seccao?: string;
@@ -646,6 +646,94 @@ function extractBestSnippet(content: string, query: string, maxLen: number = 400
     return snippet;
   }
 
+// Extract ALL non-overlapping snippets matching query terms from a content string
+function extractAllSnippets(content: string, query: string, maxLen: number = 400, maxSnippets: number = 5): string[] {
+  const clean = cleanHtmlFormatting(content || '');
+  if (!clean) return [];
+
+  const q = query.trim().toLowerCase();
+  const terms = q.split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return [];
+
+  const { processSearchQuery } = require('@/lib/search-utils');
+  const expandedTerms = processSearchQuery(query);
+
+  const STOP_WORDS = new Set([
+    'a', 'o', 'as', 'os', 'um', 'uma', 'uns', 'umas',
+    'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas',
+    'para', 'por', 'com', 'sem', 'sobre', 'entre', 'até',
+    'que', 'quem', 'qual', 'quais', 'cujo', 'cuja', 'cujos', 'cujas',
+    'é', 'são', 'foi', 'foram', 'ser', 'estar', 'ter', 'haver',
+    'fale', 'falar', 'diga', 'dizer', 'quero', 'preciso', 'gostaria',
+    'norma', 'normas', 'lei', 'leis', 'decreto', 'decretos',
+    'como', 'onde', 'quando', 'porque', 'porquê',
+    'muito', 'muita', 'muitos', 'muitas', 'pouco', 'pouca', 'poucos', 'poucas',
+    'também', 'ainda', 'já', 'agora', 'hoje', 'antes', 'depois',
+    'mais', 'menos', 'melhor', 'pior', 'bom', 'boa', 'bons', 'boas',
+    'grande', 'pequeno', 'alto', 'baixo', 'longo', 'curto',
+    'este', 'esta', 'isto', 'esse', 'essa', 'isso', 'aquele', 'aquela', 'aquilo',
+    'meu', 'minha', 'meus', 'minhas', 'teu', 'tua', 'teus', 'tuas',
+    'nosso', 'nossa', 'nossos', 'nossas', 'seu', 'sua', 'seus', 'suas',
+    'todo', 'toda', 'todos', 'todas', 'algum', 'alguma', 'alguns', 'algumas',
+    'nenhum', 'nenhuma', 'nenhuns', 'nenhumas', 'cada', 'outro', 'outros',
+    'deve', 'ser',
+  ]);
+
+  const allTerms = [...terms, ...expandedTerms]
+    .filter(t => t.length >= 3)
+    .filter(t => !STOP_WORDS.has(t));
+
+  if (allTerms.length === 0) return [];
+
+  const cleanLower = clean.toLowerCase();
+  const half = Math.floor(maxLen / 2);
+
+  // Collect all match positions for every term
+  const matchPositions: number[] = [];
+  for (const term of allTerms) {
+    let searchFrom = 0;
+    while (searchFrom < cleanLower.length) {
+      const idx = cleanLower.indexOf(term, searchFrom);
+      if (idx === -1) break;
+      matchPositions.push(idx);
+      searchFrom = idx + term.length;
+    }
+  }
+
+  if (matchPositions.length === 0) return [];
+
+  matchPositions.sort((a, b) => a - b);
+
+  // Greedily extract non-overlapping windows
+  const snippets: string[] = [];
+  let lastEnd = -1;
+
+  for (const pos of matchPositions) {
+    if (snippets.length >= maxSnippets) break;
+    // Skip positions already covered by the previous snippet window
+    if (pos < lastEnd) continue;
+
+    let start = Math.max(0, pos - half);
+    if (start > 0) {
+      const spaceIdx = clean.lastIndexOf(' ', start);
+      if (spaceIdx !== -1) start = spaceIdx + 1;
+    }
+    let end = Math.min(clean.length, start + maxLen);
+    if (end < clean.length) {
+      const spaceIdx = clean.indexOf(' ', end);
+      if (spaceIdx !== -1) end = spaceIdx;
+    }
+
+    lastEnd = end;
+    let snippet = clean.substring(start, end).trim();
+    if (start > 0) snippet = '...' + snippet;
+    if (end < clean.length) snippet = snippet + '...';
+    snippets.push(snippet);
+  }
+
+  return snippets;
+}
+
 // Helper to find chapter/article in the text BEFORE a specific excerpt
 function findHierarchyBeforeExcerpt(excerpt: string, fullText: string, contextSize: number = 5000): { 
   titulo?: string;
@@ -820,6 +908,20 @@ export async function searchNormsSemantic(
   const cached = getCachedSearch<SearchResult[]>(cacheKey);
   if (cached) {
     console.log('[Cache] Hit for semantic search:', cacheKey);
+    // Still record so rate limit tracks cache hits — otherwise users bypass the limit by repeating the same query
+    try {
+      const headersList = await headers();
+      const cachedIp = (headersList.get('x-forwarded-for')?.split(',')[0] || headersList.get('x-real-ip') || 'unknown').trim();
+      let cachedUserId: string | undefined;
+      try {
+        const supabaseAuth = await getAuthenticatedSupabaseClient();
+        const { data: { user } } = await supabaseAuth.auth.getUser();
+        cachedUserId = user?.id;
+      } catch { /* unauthenticated */ }
+      await recordSearch(cachedIp, 'semantic', query, country, cachedUserId);
+    } catch (err) {
+      console.warn('[searchNormsSemantic] Erro ao registrar busca (cache hit):', err);
+    }
     return cached;
   }
 
@@ -1006,7 +1108,7 @@ Retorne neste formato:
     }
 
     // === STAGE 2: Read full content of relevant norms and extract excerpts ===
-    console.log('[searchNormsSemantic] === ETAPA 2: Extração de trechos ===');
+    console.log('[searchNormsSemantic] === ETAPA 2: Extração de artigos ===');
 
     // Prepare full content for AI (no character limit)
     const normsForAI = normsToProcess.map((norm) => ({
@@ -1036,20 +1138,21 @@ INSTRUÇÕES CRÍTICAS:
    - Considere SINÔNIMOS e termos relacionados
    - Busque por SIGNIFICADO, não por correspondência literal de palavras
 3. Leia o CONTEÚDO COMPLETO de cada norma
-4. Encontre TODOS os trechos que respondem DIRETAMENTE à consulta
-5. Extraia trechos específicos com localização exata (artigo, capítulo, parágrafo)
-6. O campo "excerpt" DEVE conter o trecho específico:
+4. Encontre TODOS os artigos que respondem DIRETAMENTE à consulta
+5. Extraia artigos específicos com localização exata (artigo, capítulo, parágrafo)
+6. O campo "excerpt" DEVE conter o artigo específico:
    - 300-500 caracteres no máximo
    - Inclua identificadores quando possível (Ex: "Art. 5º - Altura máxima: ...")
-7. Como encontrar o trecho correto:
+7. Como encontrar o artigo correto:
    - NÃO procure apenas palavras-chave literais
    - Identifique seções que tratam do CONCEITO relacionado à consulta
    - Considere variações terminológicas (ex: "área máxima" pode aparecer como "dimensão máxima", "tamanho limite", etc.)
    - Extraia apenas a parte relevante
-8. Retorne APENAS JSON válido (array):
+8. Se um documento tiver MÚLTIPLOS TRECHOS relevantes em partes distintas do texto, inclua um objeto SEPARADO para cada trecho. O mesmo "id" pode (e deve) aparecer mais de uma vez no array quando houver múltiplas secções relevantes.
+9. Retorne APENAS JSON válido (array):
 [{
   "id": "uuid da norma",
-  "reasoning": "por que este trecho responde à consulta",
+  "reasoning": "por que este trecho específico responde à consulta",
   "relevanceScore": 0.95,
   "excerpt": "Trecho específico (300-500 caracteres) que responde diretamente à consulta"
 }]
@@ -1059,7 +1162,7 @@ EXEMPLO DE INTERPRETAÇÃO SEMÂNTICA:
 - Intenção: Descobrir limites de dimensão para lotes
 - Conceitos técnicos: área, ocupação, lote, dimensão, tamanho, máximo, limite, coeficiente de ocupação
 - Buscar por: qualquer menção a área de lotes, dimensões máximas, coeficiente de ocupação, etc.
-- Trechos relevantes podem conter: "área do lote", "ocupação máxima", "coeficiente de ocupação", "dimensões", etc.`,
+- Artigos relevantes podem conter: "área do lote", "ocupação máxima", "coeficiente de ocupação", "dimensões", etc.`,
       },
     ];
 
@@ -1122,7 +1225,7 @@ EXEMPLO DE INTERPRETAÇÃO SEMÂNTICA:
 
     // Map AI results to SearchResult format
     // Filter out results without valid excerpt OR with excerpts that are document-length
-    const MAX_EXCERPT_LENGTH = 2000; // Máximo de caracteres para um trecho válido (aumentado)
+    const MAX_EXCERPT_LENGTH = 2000; // Máximo de caracteres para um artigo válido (aumentado)
     const MIN_EXCERPT_LENGTH = 50; // Mínimo de caracteres (reduzido temporariamente)
 
     const validAiResults = aiResults.filter((r) => {
@@ -1229,6 +1332,12 @@ EXEMPLO DE INTERPRETAÇÃO SEMÂNTICA:
     
     // Fallback to textual search on any error
     console.warn('[searchNormsSemantic] Erro na IA, usando fallback textual...');
+    // Record the search even on fallback so rate limit is enforced
+    try {
+      await recordSearch(clientIp, 'semantic', query, country, userId);
+    } catch (fallbackErr) {
+      console.warn('[searchNormsSemantic] Erro ao registrar busca (fallback):', fallbackErr);
+    }
     return fallbackTextualSearch(norms, query, limit, cacheKey);
   }
 }
@@ -1268,27 +1377,27 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
     return { norm, score };
   }).filter(item => item.score > 0);
   
+  // Flatten: each norm can produce multiple excerpts (one SearchResult per excerpt)
   const results: SearchResult[] = scored
     .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map(item => {
+    .flatMap((item, normIndex) => {
       // Extract country name from joined countries data
       const countryData = item.norm.countries as { name?: string } | undefined;
       const countryName = countryData?.name || '';
-      // Criar excerpt do conteúdo: localizar a query no texto e extrair snippet ao redor
+      // Find ALL relevant excerpts from this norm's content
       const rawContent = ((item.norm.content as string) || '') + ' ' + ((item.norm.description as string) || '');
       const fullContent = cleanHtmlFormatting(rawContent);
-      const excerpt = extractBestSnippet(fullContent, query, 500);
-      // If no excerpt found (term not present), skip this result by returning null
-      if (!excerpt || excerpt.trim() === '') {
-        console.log('[fallbackTextualSearch] No excerpt found for norm:', item.norm.code);
-        return null;
+      const excerpts = extractAllSnippets(fullContent, query, 500, 5);
+
+      if (excerpts.length === 0) {
+        console.log('[fallbackTextualSearch] No excerpts found for norm:', item.norm.code);
+        return [];
       }
-      
-      console.log('[fallbackTextualSearch] Excerpt found for norm:', item.norm.code, 'excerpt length:', excerpt.length);
-      
-      return {
-        sectionId: String(item.norm.id),
+
+      console.log('[fallbackTextualSearch] Found', excerpts.length, 'excerpts for norm:', item.norm.code);
+
+      return excerpts.map((excerpt, excerptIndex) => ({
+        sectionId: `${String(item.norm.id)}-${normIndex}-${excerptIndex}`,
         normId: String(item.norm.id),
         normCode: (item.norm.code as string) || '',
         normTitle: (item.norm.title as string) || '',
@@ -1296,16 +1405,14 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
         sectionType: 'norma',
         sectionNumber: null,
         sectionTitle: null,
-        content: excerpt, // Usar excerpt em vez de conteúdo completo
+        content: excerpt,
         similarity: item.score / 10,
         decree: undefined,
         regulationNumber: undefined,
         excerpt: excerpt,
-        // Infer hierarchy from excerpt/full content when not provided by AI
         ...parseHierarchyFromText(excerpt, fullContent),
-      };
-    })
-    .filter((r) => r !== null) as SearchResult[];
+      }));
+    });
   
   // Cache the fallback results if cache key provided
   if (cacheKey) {

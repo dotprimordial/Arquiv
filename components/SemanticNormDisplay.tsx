@@ -191,7 +191,7 @@ function SemanticNormDisplay({
                     {group.normCode}
                   </span>
                   <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-semibold rounded-full">
-                    {group.sections.length} trecho{group.sections.length > 1 ? 's' : ''} relevante{group.sections.length > 1 ? 's' : ''}
+                    {group.sections.length} artigo{group.sections.length > 1 ? 's' : ''} relevante{group.sections.length > 1 ? 's' : ''}
                   </span>
                 </div>
                 <h3 className="text-xl font-bold text-zinc-900 leading-tight">
@@ -275,10 +275,10 @@ function SemanticNormDisplay({
                     )}
                   </div>
 
-                  {/* Trecho Principal */}
+                  {/* Artigo Principal */}
                   <div className="bg-white border-l-4 border-blue-500 p-4 rounded-r-lg shadow-sm">
                     <p className="text-xs font-semibold text-blue-700 mb-2">
-                      Trecho relevante:
+                      Artigo relevante:
                     </p>
                     {(() => {
                       const sectionId = group.sections[0].sectionId;
@@ -313,7 +313,7 @@ function SemanticNormDisplay({
                       onClick={() => toggleNormExpanded(group.normId)}
                       className="w-full py-3 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
                     >
-                      <span>Ver mais {group.sections.length - 1} trecho{group.sections.length > 2 ? 's' : ''}</span>
+                      <span>Ver mais {group.sections.length - 1} artigo{group.sections.length > 2 ? 's' : ''}</span>
                       <ChevronDown className="w-4 h-4" />
                     </button>
                   ) : (
@@ -362,7 +362,7 @@ function SemanticNormDisplay({
                               )}
                             </div>
 
-                            {/* Trecho */}
+                            {/* Artigo */}
                             <div className="bg-white border-l-3 border-zinc-300 p-3 rounded-r-lg">
                               {(() => {
                                 const isExpanded = expandedContents.has(section.sectionId);
