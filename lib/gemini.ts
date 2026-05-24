@@ -1,5 +1,6 @@
 import OpenRouterClient, { OpenRouterMessage } from "./openrouter";
 import { supabase } from "./supabase";
+import { processSearchQuery, calculateSearchScore } from './search-utils';
 
 // Prefer server-side key. Avoid exposing API keys to client bundles.
 const apiKey = (typeof window === 'undefined')
@@ -241,26 +242,23 @@ INSTRUÇÕES:
       }
     }
 
-    // FIX #23: Busca textual direta using normalized data
-    const lowerQuery = queryText.toLowerCase().trim();
-
-    console.log(`[getArchitecturalNorms] DEBUG - Query: "${lowerQuery}"`);
+    // FIX #23: Busca textual com processamento de linguagem natural
+    // Extrai palavras-chave e expande com sinônimos para melhor matching
+    const searchTokens = processSearchQuery(queryText);
+    
+    console.log(`[getArchitecturalNorms] DEBUG - Original query: "${queryText}"`);
+    console.log(`[getArchitecturalNorms] DEBUG - Search tokens:`, searchTokens);
     console.log(`[getArchitecturalNorms] DEBUG - Total norms loaded: ${data.length}`);
-    console.log(`[getArchitecturalNorms] DEBUG - First 3 norms:`, data.slice(0, 3).map(n => ({ code: n.code, title: n.title.substring(0, 30) })));
 
     const scoredResults = data
       .map((n: Norm) => {
-        let score = 0;
-        const title = n.title.toLowerCase();
-        const code = n.code.toLowerCase();
-        const desc = (n.description || "").toLowerCase();
-        const keywords = (n.keywords || []).map(k => k.toLowerCase());
-
-        // Buscar em code, title, description e keywords
-        if (title.includes(lowerQuery)) score += 10;
-        if (code.includes(lowerQuery)) score += 8;
-        if (keywords.some(k => k.includes(lowerQuery))) score += 6;
-        if (desc.includes(lowerQuery)) score += 4;
+        const score = calculateSearchScore(
+          searchTokens,
+          n.title,
+          n.code,
+          n.description || "",
+          n.keywords || []
+        );
 
         // DEBUG: Log when we find a match
         if (score > 0) {
@@ -280,7 +278,7 @@ INSTRUÇÕES:
     console.log(`[getArchitecturalNorms] Busca textual: ${scoredResults.length} resultados`);
 
     if (scoredResults.length === 0) {
-      // Se não encontrou, retornar todas as normas do país
+      // Se não encontrou com tokens, retornar todas as normas do país
       console.log(`[getArchitecturalNorms] DEBUG - No matches, returning all ${data.length} norms`);
       results = data.slice(0, 10).map((n) => ({
         ...n,

@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 
 import { checkRateLimit, getSearchStats } from '@/lib/rate-limit';
+import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
 import { NextResponse, NextRequest } from 'next/server';
 
 /**
@@ -17,8 +18,18 @@ export async function GET(request: NextRequest) {
     
     const clientIp = ip.trim();
 
+    // Obter cliente Supabase autenticado para ler sessão do usuário logado
+    const supabase = await getAuthenticatedSupabaseClient();
+    let userId: string | undefined;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      userId = user?.id;
+    } catch {
+      // Ignorar erros se não autenticado
+    }
+
     // Check rate limit
-    const rateLimitStatus = await checkRateLimit(clientIp, 'semantic');
+    const rateLimitStatus = await checkRateLimit(clientIp, 'semantic', undefined, userId);
     
     // Get detailed stats
     const stats = await getSearchStats(clientIp);
@@ -39,7 +50,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[api/rate-limit] Ocorreu um erro');
+    console.error('[api/rate-limit] Ocorreu um erro:', error);
     return NextResponse.json(
       { 
         error: 'Erro ao verificar limite de buscas'

@@ -27,7 +27,6 @@ interface SearchRateLimitDisplayProps {
 export function SearchRateLimitDisplay({ onLimitExceeded, compact = false }: SearchRateLimitDisplayProps) {
   const [status, setStatus] = useState<RateLimitStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -41,7 +40,6 @@ export function SearchRateLimitDisplay({ onLimitExceeded, compact = false }: Sea
 
         const data: RateLimitStatus = await response.json();
         setStatus(data);
-        setError(null);
 
         if (!data.rateLimit.allowed && onLimitExceeded) {
           onLimitExceeded();
@@ -49,7 +47,6 @@ export function SearchRateLimitDisplay({ onLimitExceeded, compact = false }: Sea
       } catch (err) {
         const error = err as Error;
         console.error('[SearchRateLimitDisplay] Error fetching rate limit:', error);
-        setError(error.message);
       } finally {
         setLoading(false);
       }

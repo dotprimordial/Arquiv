@@ -113,28 +113,23 @@ export async function recordSearch(
   country?: string,
   userId?: string
 ): Promise<void> {
-  try {
-    const supabase = getAdminSupabaseClient();
-    const queryHash = query ? generateQueryHash(query) : null;
+  const supabase = getAdminSupabaseClient();
+  const queryHash = query ? generateQueryHash(query) : null;
 
-    const { error } = await supabase
-      .from('search_usage')
-      .insert({
-        user_id: userId || null,
-        search_type: searchType,
-        query_hash: queryHash,
-        country,
-        ip_address: ipAddress,
-        searched_at: new Date().toISOString(),
-      });
+  const { error } = await supabase
+    .from('search_usage')
+    .insert({
+      user_id: userId || null,
+      search_type: searchType,
+      query_hash: queryHash,
+      country,
+      ip_address: ipAddress,
+      searched_at: new Date().toISOString(),
+    });
 
-    if (error) {
-      console.error('[recordSearch] Error recording search:', error);
-      // Non-fatal error - don't interrupt the search
-    }
-  } catch (error) {
-    console.error('[recordSearch] Unexpected error:', error);
-    // Non-fatal error
+  if (error) {
+    console.log('[recordSearch] Called with', { ipAddress, searchType, query, country, userId });
+    throw new Error(`[recordSearch] Error recording search: ${error.message}`);
   }
 }
 

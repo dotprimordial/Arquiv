@@ -568,23 +568,62 @@ function extractBestSnippet(content: string, query: string, maxLen: number = 400
     const q = query.trim().toLowerCase();
     const terms = q.split(/\s+/).filter(Boolean);
 
-    // If no terms, return start of document up to maxLen
+    // If no terms, return empty (no meaningful search)
     if (terms.length === 0) {
-      return clean.length > maxLen ? clean.substring(0, maxLen).trim() + '...' : clean;
-    }
-
-    // Find earliest occurrence of any term
-    let idx = -1;
-    for (const term of terms) {
-      const i = clean.toLowerCase().indexOf(term);
-      if (i !== -1 && (idx === -1 || i < idx)) idx = i;
-    }
-
-    // If not found, return start of document
-    if (idx === -1) {
-      // If query terms are not found, return empty to signal "no match"
       return '';
     }
+
+    // Use expanded tokens with synonyms for better matching
+    const { processSearchQuery } = require('@/lib/search-utils');
+    const expandedTerms = processSearchQuery(query);
+    
+    // Portuguese stop words to filter out
+    const STOP_WORDS = new Set([
+      'a', 'o', 'as', 'os', 'um', 'uma', 'uns', 'umas',
+      'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas',
+      'para', 'por', 'com', 'sem', 'sobre', 'entre', 'até',
+      'que', 'quem', 'qual', 'quais', 'cujo', 'cuja', 'cujos', 'cujas',
+      'é', 'são', 'foi', 'foram', 'ser', 'estar', 'ter', 'haver',
+      'fale', 'falar', 'diga', 'dizer', 'quero', 'preciso', 'gostaria',
+      'norma', 'normas', 'lei', 'leis', 'decreto', 'decretos',
+      'como', 'onde', 'quando', 'porque', 'porquê',
+      'muito', 'muita', 'muitos', 'muitas', 'pouco', 'pouca', 'poucos', 'poucas',
+      'também', 'ainda', 'já', 'agora', 'hoje', 'antes', 'depois',
+      'mais', 'menos', 'melhor', 'pior', 'bom', 'boa', 'bons', 'boas',
+      'grande', 'pequeno', 'alto', 'baixo', 'longo', 'curto',
+      'este', 'esta', 'isto', 'esse', 'essa', 'isso', 'aquele', 'aquela', 'aquilo',
+      'meu', 'minha', 'meus', 'minhas', 'teu', 'tua', 'teus', 'tuas',
+      'nosso', 'nossa', 'nossos', 'nossas', 'seu', 'sua', 'seus', 'suas',
+      'todo', 'toda', 'todos', 'todas', 'algum', 'alguma', 'alguns', 'algumas',
+      'nenhum', 'nenhuma', 'nenhuns', 'nenhumas', 'cada', 'outro', 'outros',
+      'deve', 'ser',
+    ]);
+    
+    // Filter out stop words and very short terms
+    const allTerms = [...terms, ...expandedTerms]
+      .filter(t => t.length >= 3)
+      .filter(t => !STOP_WORDS.has(t));
+
+    console.log('[extractBestSnippet] Search terms (filtered, no stop words):', allTerms.slice(0, 10));
+
+    // Find earliest occurrence of any term (expanded or original)
+    let idx = -1;
+    let matchedTerm = '';
+    for (const term of allTerms) {
+      const i = clean.toLowerCase().indexOf(term);
+      if (i !== -1 && (idx === -1 || i < idx)) {
+        idx = i;
+        matchedTerm = term;
+      }
+    }
+
+    // If not found, return empty to signal "no match" - don't return start of document
+    if (idx === -1) {
+      console.log('[extractBestSnippet] No match found for terms:', allTerms.slice(0, 5));
+      return '';
+    }
+
+    console.log('[extractBestSnippet] Found term:', matchedTerm, 'at index:', idx, 'in content of length:', clean.length);
 
     // Center snippet around found index
     const half = Math.floor(maxLen / 2);
@@ -901,11 +940,22 @@ ${JSON.stringify(summariesForAI, null, 2)}
 INSTRUÇÕES:
 1. Leia a CONSULTA do usuário: "${cleanedQuery}"
 2. Analise os RESUMOS das normas
-3. Identifique quais normas são RELEVANTES para a consulta
-4. Uma norma é relevante se o resumo mencionar tópicos relacionados à consulta
-5. Retorne APENAS os IDs das normas relevantes em formato JSON array
-6. Se nenhuma norma for relevante, retorne array vazio []
-7. NÃO inclua explicações, apenas os IDs
+3. INTERPRETE A CONSULTA SEMANTICAMENTE (não literalmente):
+   - Entenda a INTENÇÃO por trás da pergunta
+   - Traduza para CONCEITOS TÉCNICOS relevantes
+   - Considere SINÔNIMOS e termos relacionados
+   - Busque por SIGNIFICADO, não por correspondência literal de palavras
+4. Identifique quais normas são RELEVANTES para a consulta
+5. Uma norma é relevante se tratar do CONCEITO, mesmo que não use as palavras exatas
+6. Retorne APENAS os IDs das normas relevantes em formato JSON array
+7. Se nenhuma norma for relevante, retorne array vazio []
+8. NÃO inclua explicações, apenas os IDs
+
+EXEMPLO DE INTERPRETAÇÃO SEMÂNTICA:
+- Consulta: "qual deve ser a area maxima do ocupaçãao dos lotes"
+- Intenção: Descobrir limites de dimensão para lotes
+- Conceitos técnicos: área, ocupação, lote, dimensão, tamanho, máximo, limite, coeficiente de ocupação
+- Buscar por: qualquer menção a área de lotes, dimensões máximas, coeficiente de ocupação, etc.
 
 Retorne neste formato:
 {
@@ -980,23 +1030,36 @@ ${JSON.stringify(normsForAI, null, 2)}
 
 INSTRUÇÕES CRÍTICAS:
 1. Leia a CONSULTA do usuário: "${cleanedQuery}"
-2. Leia o CONTEÚDO COMPLETO de cada norma
-3. Encontre TODOS os trechos que respondem DIRETAMENTE à consulta
-4. Extraia trechos específicos com localização exata (artigo, capítulo, parágrafo)
-5. O campo "excerpt" DEVE conter o trecho específico:
+2. INTERPRETE A CONSULTA SEMANTICAMENTE (não literalmente):
+   - Entenda a INTENÇÃO por trás da pergunta
+   - Traduza para CONCEITOS TÉCNICOS relevantes
+   - Considere SINÔNIMOS e termos relacionados
+   - Busque por SIGNIFICADO, não por correspondência literal de palavras
+3. Leia o CONTEÚDO COMPLETO de cada norma
+4. Encontre TODOS os trechos que respondem DIRETAMENTE à consulta
+5. Extraia trechos específicos com localização exata (artigo, capítulo, parágrafo)
+6. O campo "excerpt" DEVE conter o trecho específico:
    - 300-500 caracteres no máximo
    - Inclua identificadores quando possível (Ex: "Art. 5º - Altura máxima: ...")
-6. Como encontrar o trecho correto:
-   - Procure palavras-chave da consulta no texto
-   - Identifique qual seção/artigo contém a resposta
+7. Como encontrar o trecho correto:
+   - NÃO procure apenas palavras-chave literais
+   - Identifique seções que tratam do CONCEITO relacionado à consulta
+   - Considere variações terminológicas (ex: "área máxima" pode aparecer como "dimensão máxima", "tamanho limite", etc.)
    - Extraia apenas a parte relevante
-7. Retorne APENAS JSON válido (array):
+8. Retorne APENAS JSON válido (array):
 [{
   "id": "uuid da norma",
   "reasoning": "por que este trecho responde à consulta",
   "relevanceScore": 0.95,
   "excerpt": "Trecho específico (300-500 caracteres) que responde diretamente à consulta"
-}]`,
+}]
+
+EXEMPLO DE INTERPRETAÇÃO SEMÂNTICA:
+- Consulta: "qual deve ser a area maxima do ocupaçãao dos lotes"
+- Intenção: Descobrir limites de dimensão para lotes
+- Conceitos técnicos: área, ocupação, lote, dimensão, tamanho, máximo, limite, coeficiente de ocupação
+- Buscar por: qualquer menção a área de lotes, dimensões máximas, coeficiente de ocupação, etc.
+- Trechos relevantes podem conter: "área do lote", "ocupação máxima", "coeficiente de ocupação", "dimensões", etc.`,
       },
     ];
 
@@ -1174,6 +1237,10 @@ INSTRUÇÕES CRÍTICAS:
 function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: string, limit: number, cacheKey?: string): SearchResult[] {
   const queryLower = cleanHtmlFormatting(query).toLowerCase();
   
+  // Use processSearchQuery to expand terms with synonyms for better matching
+  const { processSearchQuery } = require('@/lib/search-utils');
+  const searchTokens = processSearchQuery(query);
+  
   const scored = norms.map((norm) => {
     let score = 0;
     const code = cleanHtmlFormatting(String(norm.code || '')).toLowerCase();
@@ -1182,11 +1249,21 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
     const content = cleanHtmlFormatting(String(norm.content || '')).toLowerCase();
     const keywords = ((norm.keywords as string[]) || []).map(k => k.toLowerCase());
     
+    // Original query matching (higher weight)
     if (code.includes(queryLower)) score += 10;
     if (title.includes(queryLower)) score += 8;
     if (description.includes(queryLower)) score += 4;
     if (content.includes(queryLower)) score += 3;
     if (keywords.some(k => k.includes(queryLower))) score += 5;
+    
+    // Expanded tokens matching (lower weight but helps with semantic matching)
+    searchTokens.forEach((token: string) => {
+      if (code.includes(token)) score += 5;
+      if (title.includes(token)) score += 4;
+      if (description.includes(token)) score += 2;
+      if (content.includes(token)) score += 1.5;
+      if (keywords.some(k => k.includes(token))) score += 3;
+    });
     
     return { norm, score };
   }).filter(item => item.score > 0);
@@ -1203,7 +1280,12 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
       const fullContent = cleanHtmlFormatting(rawContent);
       const excerpt = extractBestSnippet(fullContent, query, 500);
       // If no excerpt found (term not present), skip this result by returning null
-      if (!excerpt || excerpt.trim() === '') return null;
+      if (!excerpt || excerpt.trim() === '') {
+        console.log('[fallbackTextualSearch] No excerpt found for norm:', item.norm.code);
+        return null;
+      }
+      
+      console.log('[fallbackTextualSearch] Excerpt found for norm:', item.norm.code, 'excerpt length:', excerpt.length);
       
       return {
         sectionId: String(item.norm.id),
