@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 import { searchNormsSemantic } from '@/app/actions/norm-actions';
 import { NextRequest, NextResponse } from 'next/server';
 

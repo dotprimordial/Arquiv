@@ -1,4 +1,4 @@
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
 import { checkRateLimit, recordSearch } from '@/lib/rate-limit';

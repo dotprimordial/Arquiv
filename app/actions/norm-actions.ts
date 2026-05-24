@@ -2,7 +2,7 @@
 
 import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from '@/lib/supabase-server';
 import { submitNormForIndexing } from './seo-actions';
-import { getCachedSearch, setCachedSearch, generateSearchCacheKey } from '@/lib/cache';
+import { getCachedSearch, setCachedSearch, generateSearchCacheKey } from '@/lib/cache-edge';
 import { analyzeDocumentStructure, chunkDocument, generateSectionEmbeddings } from '@/lib/semantic-search';
 import { checkRateLimit, recordSearch } from '@/lib/rate-limit';
 import { headers } from 'next/headers';

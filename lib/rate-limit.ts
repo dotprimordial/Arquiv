@@ -4,7 +4,6 @@
  */
 
 import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from './supabase-server';
-import crypto from 'crypto';
 
 export interface RateLimitConfig {
   // Limit for anonymous users per day (per IP)
@@ -30,8 +29,12 @@ export interface RateLimitResult {
 /**
  * Generate a hash of the search query for deduplication
  */
-function generateQueryHash(query: string): string {
-  return crypto.createHash('md5').update(query).digest('hex');
+async function generateQueryHash(query: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(query);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -120,7 +123,7 @@ export async function recordSearch(
   userId?: string
 ): Promise<void> {
   const supabase = getAdminSupabaseClient();
-  const queryHash = query ? generateQueryHash(query) : null;
+  const queryHash = query ? await generateQueryHash(query) : null;
 
   const { error } = await supabase
     .from('search_usage')

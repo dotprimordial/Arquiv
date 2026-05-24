@@ -8,7 +8,7 @@ import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import { cn } from "@/lib/utils";
 
 // Use nodejs runtime for better compatibility with database operations
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://arquiv.org';
 
