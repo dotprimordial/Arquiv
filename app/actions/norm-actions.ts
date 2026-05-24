@@ -483,17 +483,21 @@ export async function updateAllNormDescriptions() {
   }
 }
 
-// Function to clean HTML formatting from text
 function cleanHtmlFormatting(text: string): string {
+  if (!text) return '';
   return text
-    .replace(/<[^>]*>/g, '') // Remove HTML tags
-    .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
-    .replace(/&amp;/g, '&') // Replace &amp; with &
-    .replace(/&lt;/g, '<') // Replace &lt; with <
-    .replace(/&gt;/g, '>') // Replace &gt; with >
-    .replace(/&quot;/g, '"') // Replace &quot; with "
-    .replace(/&#39;/g, "'") // Replace &#39; with '
-    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .replace(/-\*-[^]*?-\*-/g, '') // Ignore custom hidden text marked with -*-
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>|<\/div>|<\/li>|<\/h[1-6]>/gi, '\n')
+    .replace(/<[^>]*>/g, '') // Remove remaining HTML tags
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ') // Replace multiple spaces/tabs with single space, preserve \n
+    .replace(/\n\s*\n+/g, '\n\n') // Collapse multiple newlines into max 2
     .trim();
 }
 
@@ -558,6 +562,44 @@ function extractHierarchyFromExcerptMarkers(text: string): HierarchyFields {
   out.item = findLast(/(?:Item|ITEM)\s+\d+/gi);
 
   return out;
+}
+
+function adjustSnippetBoundaries(clean: string, start: number, end: number, maxExpansion: number = 200) {
+  let newStart = start;
+  let newEnd = end;
+
+  if (start > 0) {
+    const searchLimit = Math.max(0, start - maxExpansion);
+    const textBefore = clean.substring(searchLimit, start);
+    const sentenceRegex = /[.?!;]\s+|\n+/g;
+    let match;
+    let lastMatchIdx = -1;
+    let lastMatchLen = 0;
+    while ((match = sentenceRegex.exec(textBefore)) !== null) {
+      lastMatchIdx = match.index;
+      lastMatchLen = match[0].length;
+    }
+    if (lastMatchIdx !== -1) {
+      newStart = searchLimit + lastMatchIdx + lastMatchLen;
+    } else {
+      const spaceIdx = clean.lastIndexOf(' ', start);
+      if (spaceIdx !== -1) newStart = spaceIdx + 1;
+    }
+  }
+
+  if (end < clean.length) {
+    const searchLimit = Math.min(clean.length, end + maxExpansion);
+    const textAfter = clean.substring(end, searchLimit);
+    const match = /[.?!;](\s+|$)|\n+/.exec(textAfter);
+    if (match) {
+      newEnd = end + match.index + 1; // include punctuation
+    } else {
+      const spaceIdx = clean.indexOf(' ', end);
+      if (spaceIdx !== -1) newEnd = spaceIdx;
+    }
+  }
+
+  return { start: newStart, end: newEnd };
 }
 
 // Extract a concise snippet around the query terms from a larger content string
@@ -628,17 +670,11 @@ function extractBestSnippet(content: string, query: string, maxLen: number = 400
     // Center snippet around found index
     const half = Math.floor(maxLen / 2);
     let start = Math.max(0, idx - half);
-    // Try to align to word boundary
-    if (start > 0) {
-      const spaceIdx = clean.lastIndexOf(' ', start);
-      if (spaceIdx !== -1) start = spaceIdx + 1;
-    }
     let end = Math.min(clean.length, start + maxLen);
-    // Extend end to end of word
-    if (end < clean.length) {
-      const spaceIdx = clean.indexOf(' ', end);
-      if (spaceIdx !== -1) end = spaceIdx;
-    }
+
+    const bounds = adjustSnippetBoundaries(clean, start, end, 200);
+    start = bounds.start;
+    end = bounds.end;
 
     let snippet = clean.substring(start, end).trim();
     if (start > 0) snippet = '...' + snippet;
@@ -714,15 +750,11 @@ function extractAllSnippets(content: string, query: string, maxLen: number = 400
     if (pos < lastEnd) continue;
 
     let start = Math.max(0, pos - half);
-    if (start > 0) {
-      const spaceIdx = clean.lastIndexOf(' ', start);
-      if (spaceIdx !== -1) start = spaceIdx + 1;
-    }
     let end = Math.min(clean.length, start + maxLen);
-    if (end < clean.length) {
-      const spaceIdx = clean.indexOf(' ', end);
-      if (spaceIdx !== -1) end = spaceIdx;
-    }
+
+    const bounds = adjustSnippetBoundaries(clean, start, end, 200);
+    start = bounds.start;
+    end = bounds.end;
 
     lastEnd = end;
     let snippet = clean.substring(start, end).trim();
@@ -1140,21 +1172,26 @@ INSTRUÇÕES CRÍTICAS:
 3. Leia o CONTEÚDO COMPLETO de cada norma
 4. Encontre TODOS os artigos que respondem DIRETAMENTE à consulta
 5. Extraia artigos específicos com localização exata (artigo, capítulo, parágrafo)
-6. O campo "excerpt" DEVE conter o artigo específico:
+6. O campo "excerpt" DEVE conter a CITAÇÃO LITERAL E EXATA da norma:
    - 300-500 caracteres no máximo
-   - Inclua identificadores quando possível (Ex: "Art. 5º - Altura máxima: ...")
+   - NUNCA adicione, modifique ou resuma o texto. Use as palavras exatas do documento.
+   - NÃO adicione manualmente identificadores (ex: "Art. 5º") dentro do texto do excerpt se não fizerem parte do trecho extraído.
 7. Como encontrar o artigo correto:
    - NÃO procure apenas palavras-chave literais
    - Identifique seções que tratam do CONCEITO relacionado à consulta
    - Considere variações terminológicas (ex: "área máxima" pode aparecer como "dimensão máxima", "tamanho limite", etc.)
    - Extraia apenas a parte relevante
 8. Se um documento tiver MÚLTIPLOS TRECHOS relevantes em partes distintas do texto, inclua um objeto SEPARADO para cada trecho. O mesmo "id" pode (e deve) aparecer mais de uma vez no array quando houver múltiplas secções relevantes.
-9. Retorne APENAS JSON válido (array):
+9. Extraia a localização exata do trecho no documento e preencha os campos de hierarquia (artigo, capitulo, titulo) separadamente do texto.
+10. Retorne APENAS JSON válido (array):
 [{
   "id": "uuid da norma",
   "reasoning": "por que este trecho específico responde à consulta",
   "relevanceScore": 0.95,
-  "excerpt": "Trecho específico (300-500 caracteres) que responde diretamente à consulta"
+  "excerpt": "CITAÇÃO EXATA E LITERAL do documento (sem resumos, sem adicionar palavras extras no início)",
+  "artigo": "Art. 5º",
+  "capitulo": "Capítulo II",
+  "titulo": "TÍTULO III"
 }]
 
 EXEMPLO DE INTERPRETAÇÃO SEMÂNTICA:
@@ -1206,6 +1243,9 @@ EXEMPLO DE INTERPRETAÇÃO SEMÂNTICA:
       reasoning: string;
       relevanceScore: number;
       excerpt?: string;
+      artigo?: string;
+      capitulo?: string;
+      titulo?: string;
     }>;
     try {
       const parsed = JSON.parse(cleanedText);
@@ -1283,7 +1323,17 @@ EXEMPLO DE INTERPRETAÇÃO SEMÂNTICA:
         }
         
         const contentText = cleanHtmlFormatting(String(norm.content || ''));
-        const hierarchy = parseHierarchyFromText(excerpt, contentText);
+        // Try parsing from AI returned fields first, fallback to regex
+        const hierarchy = {
+          titulo: aiResult.titulo || undefined,
+          capitulo: aiResult.capitulo || undefined,
+          artigo: aiResult.artigo || undefined,
+          ...parseHierarchyFromText(excerpt, contentText)
+        };
+        // Prefer AI explicitly returned fields if available to avoid overriding with undefined
+        if (aiResult.titulo) hierarchy.titulo = aiResult.titulo;
+        if (aiResult.capitulo) hierarchy.capitulo = aiResult.capitulo;
+        if (aiResult.artigo) hierarchy.artigo = aiResult.artigo;
         
         console.log('[searchNormsSemantic] Hierarchy extraction:', {
           normId: String(norm.id).substring(0, 8),

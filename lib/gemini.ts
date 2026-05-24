@@ -58,6 +58,11 @@ function extractJSON(text: string): string {
   return cleaned.substring(start, end + 1);
 }
 
+function removeHiddenText(text: string): string {
+  if (!text) return '';
+  return text.replace(/-\*-[^]*?-\*-/g, '');
+}
+
 export const getArchitecturalNorms = async (
   country: string,
   category: string = "Todas",
@@ -272,7 +277,9 @@ INSTRUÇÕES:
       .slice(0, 10)
       .map(item => ({
         ...item.norm,
-        reasoning: item.norm.description || `Norma ${item.norm.code} — ${item.norm.title}`
+        title: removeHiddenText(item.norm.title),
+        description: removeHiddenText(item.norm.description || ''),
+        reasoning: removeHiddenText(item.norm.description || `Norma ${item.norm.code} — ${item.norm.title}`)
       }));
 
     console.log(`[getArchitecturalNorms] Busca textual: ${scoredResults.length} resultados`);
@@ -282,7 +289,9 @@ INSTRUÇÕES:
       console.log(`[getArchitecturalNorms] DEBUG - No matches, returning all ${data.length} norms`);
       results = data.slice(0, 10).map((n) => ({
         ...n,
-        reasoning: n.description || `Norma ${n.code} — ${n.title}`
+        title: removeHiddenText(n.title),
+        description: removeHiddenText(n.description || ''),
+        reasoning: removeHiddenText(n.description || `Norma ${n.code} — ${n.title}`)
       }));
     } else {
       results = scoredResults;
@@ -425,8 +434,11 @@ export const getFullNormContentById = async (normId: string): Promise<string> =>
         console.log(`[getFullNormContentById] PDF encontrado: ${normData.file_url}`);
         return `PDF:${normData.file_url}`;
       } else if (normData.content || normData.structured_content) {
-        console.log(`[getFullNormContentById] Conteúdo encontrado no Supabase`);
-        return normData.content || normData.structured_content || '';
+        let finalContent = normData.content || normData.structured_content || '';
+        if (finalContent) {
+          finalContent = finalContent.replace(/-\*-[^]*?-\*-/g, '');
+        }
+        return finalContent;
       }
     } else if (error) {
       console.error("❌ Erro do Supabase:", JSON.stringify(error, null, 2));
