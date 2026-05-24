@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { motion, useAnimation } from 'framer-motion';
+import { motion, useAnimation, type Variants } from 'framer-motion';
 
 type AnimationControls = ReturnType<typeof useAnimation>;
 import { Search } from 'lucide-react';
@@ -108,7 +108,7 @@ const cardVariants = {
   }),
 };
 
-const glowVariants = {
+const glowVariants: Variants = {
   animate: {
     boxShadow: [
       '0 0 20px rgba(59, 130, 246, 0.2)',
@@ -119,7 +119,7 @@ const glowVariants = {
     transition: {
       duration: 1,
       repeat: Infinity,
-      ease: 'easeInOut',
+      ease: 'easeInOut' as const,
     },
   },
 };

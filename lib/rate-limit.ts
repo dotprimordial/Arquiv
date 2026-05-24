@@ -99,7 +99,7 @@ export async function checkRateLimit(
 
     return {
       allowed: true,
-      remaining: dailyLimit - dayCount,
+      remaining: dailyLimit - safeDayCount,
       limit: dailyLimit,
     };
   } catch (error) {
