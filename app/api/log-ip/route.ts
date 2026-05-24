@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabaseClient, getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
   // Retrieve client IP from headers (compatible with various deployments)

@@ -54,8 +54,9 @@ function SemanticNormDisplay({
       await generateNormSummaryServer(normId);
       toast.success('Resumo gerado com sucesso!');
       // Pequeno delay para dar tempo do banco atualizar antes do refresh opcional
-    } catch (error: any) {
-      toast.error(error.message || 'Erro ao gerar resumo');
+    } catch (error) {
+      const err = error as Error;
+      toast.error(err.message || 'Erro ao gerar resumo');
     } finally {
       setGeneratingSummaryId(null);
     }
@@ -168,7 +169,7 @@ function SemanticNormDisplay({
       </div>
 
       {/* Grouped Results by Norm */}
-      {groupedResults.map((group, groupIndex) => (
+      {groupedResults.map((group) => (
         <motion.div
           key={group.normId}
           layout

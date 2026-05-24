@@ -7,6 +7,7 @@ import { analyzeDocumentStructure, chunkDocument, generateSectionEmbeddings } fr
 import { checkRateLimit, recordSearch } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import OpenRouterClient, { OpenRouterMessage } from '@/lib/openrouter';
+import { processSearchQuery } from '@/lib/search-utils';
 
 const apiKey = process.env.OPENROUTER_API_KEY || process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || '';
 
@@ -240,7 +241,6 @@ export async function processAndUploadNorm(
 
     // Step 4: Generate AI summary of the norm
     console.log(`[processAndUploadNorm] === INÍCIO GERAÇÃO RESUMO ===`);
-    let summaryGenerated = false;
     const contentToSummarize = formData.content || '';
     // Clean HTML before checking length
     const cleanedContent = cleanHtmlFormatting(contentToSummarize);
@@ -302,7 +302,6 @@ INSTRUÇÕES:
               });
 
             if (!insertError) {
-              summaryGenerated = true;
               console.log(`[processAndUploadNorm] ✓ Summary generated and saved to summaries table`);
             } else {
               console.error(`[processAndUploadNorm] Failed to save summary:`, insertError);
@@ -394,7 +393,7 @@ INSTRUÇÕES:
       sectionsCreated,
       embeddingsGenerated,
     };
-  } catch (error: unknown) {
+  } catch {
     console.error('[processAndUploadNorm] Ocorreu um erro interno ao processar a norma');
     throw new Error('Erro interno ao processar a norma');
   }
@@ -616,7 +615,6 @@ function extractBestSnippet(content: string, query: string, maxLen: number = 400
     }
 
     // Use expanded tokens with synonyms for better matching
-    const { processSearchQuery } = require('@/lib/search-utils');
     const expandedTerms = processSearchQuery(query);
     
     // Portuguese stop words to filter out
@@ -691,7 +689,6 @@ function extractAllSnippets(content: string, query: string, maxLen: number = 400
   const terms = q.split(/\s+/).filter(Boolean);
   if (terms.length === 0) return [];
 
-  const { processSearchQuery } = require('@/lib/search-utils');
   const expandedTerms = processSearchQuery(query);
 
   const STOP_WORDS = new Set([
@@ -790,7 +787,7 @@ function findHierarchyBeforeExcerpt(excerpt: string, fullText: string, contextSi
     item?: string;
   } = {};
 
-  let ex = stripSnippetEllipsis(cleanHtmlFormatting(excerpt || ''));
+  const ex = stripSnippetEllipsis(cleanHtmlFormatting(excerpt || ''));
   let doc = cleanHtmlFormatting(fullText || '');
   if (!doc || !ex) return out;
 
@@ -886,15 +883,6 @@ function findHierarchyBeforeExcerpt(excerpt: string, fullText: string, contextSi
   return out;
 }
 
-// Helper to extract context before a specific text position in full document
-function findContextBeforeExcerpt(excerpt: string, fullText: string, contextChars: number = 2000): string {
-  const excerptStart = fullText.indexOf(excerpt);
-  if (excerptStart === -1) return excerpt; // Excerpt not found in full text, return excerpt only
-  
-  const contextStart = Math.max(0, excerptStart - contextChars);
-  return fullText.substring(contextStart, excerptStart + excerpt.length);
-}
-
 // Top-level helper to infer chapter/article/paragraph from a text snippet or full document
 function parseHierarchyFromText(excerpt: string, fullText?: string): HierarchyFields {
   const cleanExcerpt = stripSnippetEllipsis(cleanHtmlFormatting(excerpt || ''));
@@ -974,7 +962,7 @@ export async function searchNormsSemantic(
     const supabaseAuth = await getAuthenticatedSupabaseClient();
     const { data: { user } } = await supabaseAuth.auth.getUser();
     userId = user?.id;
-  } catch (err) {
+  } catch {
     // User not authenticated, continue with IP-based rate limiting
     console.log('[searchNormsSemantic] User not authenticated, using IP-based rate limiting');
   }
@@ -1377,7 +1365,7 @@ EXEMPLO DE INTERPRETAÇÃO SEMÂNTICA:
     }
 
     return results as SearchResult[];
-  } catch (err: unknown) {
+  } catch {
     console.error('[searchNormsSemantic] Ocorreu um erro interno na IA');
     
     // Fallback to textual search on any error
@@ -1397,7 +1385,6 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
   const queryLower = cleanHtmlFormatting(query).toLowerCase();
   
   // Use processSearchQuery to expand terms with synonyms for better matching
-  const { processSearchQuery } = require('@/lib/search-utils');
   const searchTokens = processSearchQuery(query);
   
   const scored = norms.map((norm) => {

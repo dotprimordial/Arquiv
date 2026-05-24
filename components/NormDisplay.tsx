@@ -42,8 +42,9 @@ function NormDisplay({
     try {
       await generateNormSummaryServer(normId);
       toast.success('Resumo gerado com sucesso!');
-    } catch (error: any) {
-      toast.error(error.message || 'Erro ao gerar resumo');
+    } catch (error) {
+      const err = error as Error;
+      toast.error(err.message || 'Erro ao gerar resumo');
     } finally {
       setGeneratingSummaryId(null);
     }
@@ -100,7 +101,7 @@ function NormDisplay({
         {countryCode} Mostrando <span className="font-bold text-zinc-900">{norms.length}</span> normas para <span className="font-bold text-zinc-900">{countryName}</span>
       </p>
       
-      {norms.map((norm, index) => (
+      {norms.map((norm) => (
         <motion.div
           key={norm.id}
           layout

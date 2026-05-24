@@ -1,5 +1,3 @@
-import { cn } from "@/lib/utils";
-import { useState } from "react";
 export default function Example() {
     return (
         <div className="flex items-center gap-2">

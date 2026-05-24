@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import localFont from 'next/font/local';
-import Script from 'next/script';
 import { Toaster } from 'sonner';
 import './globals.css';
 import AdScript from '@/components/AdScript';

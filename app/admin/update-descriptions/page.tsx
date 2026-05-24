@@ -5,7 +5,7 @@ import { updateAllNormDescriptions } from '@/app/actions/norm-actions';
 
 export default function UpdateDescriptionsPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
 
   const handleUpdate = async () => {
     setStatus('loading');

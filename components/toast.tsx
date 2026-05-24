@@ -139,6 +139,7 @@ const ToastContainer = () => {
         setShownIds(prev => [...prev, ...unseen]);
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toasts]);
 
   const lastVisibleCount = 3;

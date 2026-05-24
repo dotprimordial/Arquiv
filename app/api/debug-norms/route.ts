@@ -136,7 +136,7 @@ export async function GET(_request: Request) {
         }
       }
     });
-  } catch (error: unknown) {
+  } catch {
     console.error('[debug-norms] Ocorreu um erro na API de diagnóstico');
     return Response.json({
       status: 'error',

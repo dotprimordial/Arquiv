@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { motion, useAnimation, type AnimationControls } from 'framer-motion';
+import { motion, useAnimation } from 'framer-motion';
+
+type AnimationControls = ReturnType<typeof useAnimation>;
 import { Search } from 'lucide-react';
 import Image from 'next/image';
 

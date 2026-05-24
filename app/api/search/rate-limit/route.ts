@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     // Get IP from request headers
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
                request.headers.get('x-real-ip') || 
-               request.ip || 
+               (request as { ip?: string }).ip || 
                'unknown';
     
     const clientIp = ip.trim();
@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
         semanticSearches: 0,
       },
     });
-  } catch (error) {
-    console.error('[api/rate-limit] Ocorreu um erro:', error);
+  } catch {
+    console.error('[api/rate-limit] Ocorreu um erro');
     return NextResponse.json(
       { 
         error: 'Erro ao verificar limite de buscas'

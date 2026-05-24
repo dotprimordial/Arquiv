@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     }));
 
     return NextResponse.json(formatted);
-  } catch (error) {
+  } catch {
     console.error('[GET /api/norms/trending] Ocorreu um erro');
     return NextResponse.json(
       { error: 'Erro interno no servidor' },

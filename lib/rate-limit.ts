@@ -40,7 +40,8 @@ function generateQueryHash(query: string): string {
  */
 export async function checkRateLimit(
   ipAddress: string,
-  searchType: 'semantic' | 'keyword' | 'browse' = 'keyword',
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  searchType: 'semantic' | 'keyword' | 'browse' | 'visit' = 'keyword',
   config: RateLimitConfig = DEFAULT_RATE_LIMIT,
   userId?: string
 ): Promise<RateLimitResult> {
@@ -113,7 +114,7 @@ export async function checkRateLimit(
  */
 export async function recordSearch(
   ipAddress: string,
-  searchType: 'semantic' | 'keyword' | 'browse' = 'keyword',
+  searchType: 'semantic' | 'keyword' | 'browse' | 'visit' = 'keyword',
   query?: string,
   country?: string,
   userId?: string

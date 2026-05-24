@@ -24,6 +24,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     this.handleReset = this.handleReset.bind(this);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   static getDerivedStateFromError(_: Error) {
     // Update state so the next render shows the fallback UI.
     return { hasError: true };

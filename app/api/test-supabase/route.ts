@@ -151,7 +151,7 @@ export async function GET() {
       countriesError: countriesError ? 'Erro' : null,
       categoriesError: categoriesError ? 'Erro' : null,
     });
-  } catch (error: unknown) {
+  } catch {
     console.error('[test-supabase] Ocorreu um erro interno');
     return Response.json({
       ok: false,
