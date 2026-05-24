@@ -50,7 +50,7 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
       if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
         setError('Não foi possível contactar o serviço de autenticação. Verifique a sua ligação.');
       } else {
-        setError('Ocorreu um problema ao entrar com o Google. Por favor, tente novamente.');
+        setError('Não foi possível entrar com o Google. Por favor, tente novamente.');
       }
       setIsLoading(false);
     }
@@ -86,7 +86,7 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
       
       // Handle specific error types
       if (errorName === 'AuthRetryableFetchError' || errorMessage.includes('Failed to fetch')) {
-        setError('Não foi possível estabelecer ligação com o servidor. Verifique a sua internet ou tente mais tarde.');
+        setError('Não foi possível ligar ao serviço. Verifique a sua ligação à internet.');
       } else if (err instanceof Error) {
         // Check for common Supabase auth errors
         const message = errorMessage.toLowerCase();
@@ -100,7 +100,7 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
           setError(errorMessage);
         }
       } else {
-        setError('Erro desconhecido ao fazer login.');
+        setError('Ocorreu um erro inesperado. Tente novamente.');
       }
     } finally {
       setIsLoading(false);

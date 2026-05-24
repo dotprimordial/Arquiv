@@ -19,9 +19,10 @@ export async function GET(request: Request) {
     const supabase = await getAuthenticatedSupabaseClient();
 
     // Obter IP do cliente a partir dos cabeçalhos
-    const forwardedFor = request.headers.get('x-forwarded-for');
-    const realIp = request.headers.get('x-real-ip');
-    const cfIp = request.headers.get('cf-connecting-ip'); // Específico da Cloudflare
+    const headersList = request.headers;
+    const cfIp = headersList.get('cf-connecting-ip');
+    const forwardedFor = headersList.get('x-forwarded-for');
+    const realIp = headersList.get('x-real-ip');
     
     const ip = cfIp || 
                (forwardedFor ? forwardedFor.split(',')[0] : null) || 

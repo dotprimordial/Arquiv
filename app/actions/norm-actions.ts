@@ -948,7 +948,8 @@ export async function searchNormsSemantic(
   // Get IP from headers
   const getIp = async (): Promise<string> => {
     const headersList = await headers();
-    const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 
+    const ip = headersList.get('cf-connecting-ip') || 
+               headersList.get('x-forwarded-for')?.split(',')[0] || 
                headersList.get('x-real-ip') || 
                'unknown';
     return ip.trim();
@@ -994,7 +995,7 @@ export async function searchNormsSemantic(
   let norms: Array<Record<string, unknown>> = [];
   
   try {
-    const { supabase } = await import('@/lib/supabase');
+    const supabase = await getAuthenticatedSupabaseClient();
     console.log('[searchNormsSemantic] Buscando todas as normas para análise...');
     
     // Fetch all norms with country name via join
