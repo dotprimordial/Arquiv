@@ -45,11 +45,12 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
       if (error) throw error;
     } catch (err: unknown) {
       console.error('[SignIn Google] Error:', err);
-      
-      if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
-        setError('Erro de conexão. Verifique sua internet ou tente novamente mais tarde.');
+      const errorMessage = err instanceof Error ? err.message : String(err);
+
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        setError('Não foi possível contactar o serviço de autenticação. Verifique a sua ligação.');
       } else {
-        setError(err instanceof Error ? err.message : 'Erro ao fazer login com Google');
+        setError('Ocorreu um problema ao entrar com o Google. Por favor, tente novamente.');
       }
       setIsLoading(false);
     }
@@ -85,14 +86,14 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
       
       // Handle specific error types
       if (errorName === 'AuthRetryableFetchError' || errorMessage.includes('Failed to fetch')) {
-        setError('Erro de conexão com o servidor. Verifique:\n1. Sua conexão de internet\n2. Se o projeto Supabase está ativo\n3. As configurações em .env.local');
+        setError('Não foi possível estabelecer ligação com o servidor. Verifique a sua internet ou tente mais tarde.');
       } else if (err instanceof Error) {
         // Check for common Supabase auth errors
         const message = errorMessage.toLowerCase();
         if (message.includes('invalid login credentials')) {
           setError('Email ou palavra-passe incorretos.');
         } else if (message.includes('email not confirmed')) {
-          setError('Por favor, confirme o seu email antes de entrar.');
+          setError('A sua conta ainda não foi confirmada. Verifique o seu email.');
         } else if (message.includes('rate limit')) {
           setError('Muitas tentativas. Aguarde alguns minutos.');
         } else {

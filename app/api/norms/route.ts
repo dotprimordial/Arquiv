@@ -10,12 +10,22 @@ export async function GET(request: Request) {
     const categoryParam = url.searchParams.get('category') || 'Todas';
 
     console.log(`[api/norms] Query: country=${countryParam}, category=${categoryParam}`);
+    // Validação básica de ambiente
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      console.error('[api/norms] Erro crítico: NEXT_PUBLIC_SUPABASE_URL não configurada');
+      return Response.json({ error: 'Configuração do servidor incompleta' }, { status: 500 });
+    }
 
     const supabase = await getAuthenticatedSupabaseClient();
 
     // Obter IP do cliente a partir dos cabeçalhos
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
-               request.headers.get('x-real-ip') || 
+    const forwardedFor = request.headers.get('x-forwarded-for');
+    const realIp = request.headers.get('x-real-ip');
+    const cfIp = request.headers.get('cf-connecting-ip'); // Específico da Cloudflare
+    
+    const ip = cfIp || 
+               (forwardedFor ? forwardedFor.split(',')[0] : null) || 
+               realIp || 
                'unknown';
     const clientIp = ip.trim();
 

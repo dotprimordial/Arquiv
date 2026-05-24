@@ -29,7 +29,13 @@ export default function SignUp({ onToggle, onClose }: { onToggle: () => void; on
       });
       if (error) throw error;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      console.error('[SignUp Google] Error:', err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      if (errorMessage.includes('Failed to fetch')) {
+        setError('Erro de ligação ao serviço. Tente novamente mais tarde.');
+      } else {
+        setError('Não foi possível registar com o Google neste momento.');
+      }
     } finally {
       setIsLoading(false);
     }
