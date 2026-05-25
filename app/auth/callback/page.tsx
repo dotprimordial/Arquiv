@@ -11,15 +11,10 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Debug: Log the current URL and localStorage state
-        console.log('[AuthCallback] Current URL:', window.location.href);
-        console.log('[AuthCallback] Search params:', window.location.search);
-        
         // Check for code verifier in localStorage (PKCE requirement)
         // Note: Supabase stores code verifier as {storageKey}-code-verifier
         const codeVerifier = localStorage.getItem('sb-arquiv-auth-token-code-verifier') || 
                             localStorage.getItem('supabase.auth.codeVerifier');
-        console.log('[AuthCallback] Code verifier present:', !!codeVerifier);
         
         // Parse the URL hash and query parameters
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -30,25 +25,19 @@ export default function AuthCallbackPage() {
         const refreshToken = hashParams.get('refresh_token');
         const authCode = queryParams.get('code');
         
-        console.log('[AuthCallback] Access token present:', !!accessToken);
-        console.log('[AuthCallback] Auth code present:', !!authCode);
-        
         // If we have an access_token in the hash, set the session directly
         if (accessToken) {
-          console.log('[AuthCallback] Setting session from access_token');
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken || '',
           });
           
           if (error) {
-            console.error('[AuthCallback] Error setting session:', error);
             setError(error.message);
             return;
           }
           
           if (data.session) {
-            console.log('[AuthCallback] Session established via access_token');
             router.push('/');
             return;
           }

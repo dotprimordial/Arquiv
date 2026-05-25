@@ -9,7 +9,7 @@ import { headers } from 'next/headers';
 import OpenRouterClient, { OpenRouterMessage } from '@/lib/openrouter';
 import { processSearchQuery } from '@/lib/search-utils';
 
-const apiKey = process.env.OPENROUTER_API_KEY || process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || '';
+const apiKey = process.env.OPENROUTER_API_KEY || '';
 
 const isInvalidKey = (key: string) => !key || key.length < 10 || key === "dummy-key" || key === "MY_OPENROUTER_API_KEY";
 
@@ -135,7 +135,11 @@ export async function processAndUploadNorm(
   const supabase = await getAuthenticatedSupabaseClient();
   // For write operations, prefer the admin client (bypasses RLS when SERVICE_ROLE_KEY is set)
   const supabaseWrite = getAdminSupabaseClient();
-  const adminEmail = process.env.ADMIN_EMAIL || 'seantomasytbr@gmail.com';
+  const adminEmail = process.env.ADMIN_EMAIL;
+
+  if (!adminEmail) {
+    throw new Error('Configuração do servidor incompleta: ADMIN_EMAIL não definido');
+  }
 
   // Server-side validation: verify user is admin (case-insensitive, trimmed)
   if (formData.userEmail?.trim().toLowerCase() !== adminEmail.toLowerCase()) {
