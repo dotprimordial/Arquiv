@@ -15,7 +15,6 @@ export default function AuthCallbackPage() {
         // Note: Supabase stores code verifier as {storageKey}-code-verifier
         const codeVerifier = localStorage.getItem('sb-arquiv-auth-token-code-verifier') || 
                             localStorage.getItem('supabase.auth.codeVerifier');
-        
         // Parse the URL hash and query parameters
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const queryParams = new URLSearchParams(window.location.search);
