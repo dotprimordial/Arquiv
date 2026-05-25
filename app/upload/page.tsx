@@ -251,8 +251,8 @@ export default function UploadPage() {
       console.log('[DOCX Upload] Extraindo texto do documento...');
       const { extractTextFromDOCXLimited: extractFn } = await import('@/lib/docx-extractor');
       const extractedText = await extractFn(file, 500000, true);
-      const { extractTextFromDOCX: extractFn } = await import('@/lib/docx-extractor');
-      const extractedText = await extractFn(file);
+      const { extractTextFromDOCX } = await import('@/lib/docx-extractor');
+      const extractedText = await extractTextFromDOCX(file);
       setNormContent(extractedText);
       setDocxFile(file);
       console.log(`[DOCX Upload] Texto extraído: ${extractedText.length} caracteres`);
