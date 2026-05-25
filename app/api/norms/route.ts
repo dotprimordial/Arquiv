@@ -1,5 +1,3 @@
-export const runtime = 'edge';
-
 import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
 import { checkRateLimit, recordSearch } from '@/lib/rate-limit';
 
@@ -65,6 +63,7 @@ export async function GET(request: Request) {
       .single();
 
     if (countryError || !countryData) {
+      console.error(`[api/norms] Erro ao buscar país:`, countryError?.message || 'País não encontrado no DB');
       return Response.json({
         error: `País "${countryParam}" não encontrado`
       }, { status: 400 });
