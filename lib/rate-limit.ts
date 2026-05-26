@@ -55,7 +55,7 @@ export async function checkRateLimit(
 
     // Determine limit based on authentication status
     const isAuth = !!userId;
-    const dailyLimit = isAuth ? config.authenticatedSearchesPerDay : config.anonymousSearchesPerDay;
+    let dailyLimit = isAuth ? config.authenticatedSearchesPerDay : config.anonymousSearchesPerDay;
 
     // Build query based on authentication status
     let countQuery = supabase
