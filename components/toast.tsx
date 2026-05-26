@@ -1,3 +1,5 @@
+'use client';
+
 import { ReactNode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import clsx from "clsx";
@@ -319,4 +321,3 @@ export const useToasts = () => {
     }, [])
   };
 };
-
