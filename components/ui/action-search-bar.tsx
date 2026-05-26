@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Clock, X } from 'lucide-react';
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ActionSearchBarProps {
@@ -39,12 +41,10 @@ export function ActionSearchBar({
   const addRecentSearch = (searchQuery: string) => {
     const trimmed = searchQuery.trim();
     if (!trimmed) return;
-
     const updated = [
       trimmed,
       ...recentSearches.filter((s) => s !== trimmed),
     ].slice(0, maxRecentSearches);
-
     setRecentSearches(updated);
     localStorage.setItem('normRecentSearches', JSON.stringify(updated));
   };
@@ -66,20 +66,15 @@ export function ActionSearchBar({
     setIsFocused(false);
   };
 
-  const handleClearRecent = (e: React.MouseEvent, query: string) => {
+  const handleClearRecent = (e: React.MouseEvent, q: string) => {
     e.stopPropagation();
-    setRecentSearches(recentSearches.filter((s) => s !== query));
-    localStorage.setItem(
-      'normRecentSearches',
-      JSON.stringify(recentSearches.filter((s) => s !== query))
-    );
+    const filtered = recentSearches.filter((s) => s !== q);
+    setRecentSearches(filtered);
+    localStorage.setItem('normRecentSearches', JSON.stringify(filtered));
   };
 
   const handleClickOutside = (e: MouseEvent) => {
-    if (
-      containerRef.current &&
-      !containerRef.current.contains(e.target as Node)
-    ) {
+    if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
       setIsFocused(false);
     }
   };
@@ -92,26 +87,26 @@ export function ActionSearchBar({
   }, []);
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full max-w-5xl mx-auto px-6 relative"
-    >
-      <form onSubmit={handleSubmit} className="relative group">
-        <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400 group-focus-within:text-zinc-600 transition-colors z-10" />
+    <div ref={containerRef} className="w-full max-w-5xl mx-auto px-6 relative">
+      <form onSubmit={handleSubmit} className="relative flex items-center">
         <input
           ref={inputRef}
           type="text"
           placeholder={placeholder}
-          className="w-full pl-14 pr-6 py-5 bg-white border border-zinc-200 rounded-2xl shadow-sm focus:ring-4 focus:ring-zinc-100 focus:border-zinc-300 outline-none transition-all text-zinc-900 placeholder:text-zinc-400 text-lg"
+          className="w-full pl-6 pr-14 py-4 bg-white border border-zinc-200 rounded-2xl shadow-sm focus:ring-4 focus:ring-zinc-100 focus:border-zinc-300 outline-none transition-all text-zinc-900 placeholder:text-zinc-400 text-lg"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsFocused(true)}
         />
-        {isLoading && (
-          <div className="absolute right-6 top-1/2 -translate-y-1/2 z-10">
-            <div className="w-5 h-5 border-2 border-zinc-200 border-t-zinc-900 rounded-full animate-spin" />
-          </div>
-        )}
+        <Button
+          type="submit"
+          disabled={isLoading}
+          variant="ghost"
+          size="icon"
+          className="absolute right-3"
+        >
+          <Search className="size-4" />
+        </Button>
       </form>
 
       {/* Dropdown: Recent Searches */}
@@ -125,44 +120,37 @@ export function ActionSearchBar({
             className="absolute top-full left-6 right-6 mt-2 bg-white border border-zinc-200 rounded-2xl shadow-lg z-50 overflow-hidden max-h-96 overflow-y-auto"
           >
             <div className="p-3">
-              {/* Recent Searches Section */}
-              {recentSearches.length > 0 && (
-                <div className="mb-2">
-                  <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-3 h-3" />
-                      Pesquisas Recentes
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    {recentSearches.map((recentQuery, idx) => (
-                      <motion.button
-                        key={`recent-${idx}`}
-                        initial={{ opacity: 0, x: -4 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -4 }}
-                        transition={{ delay: idx * 0.03 }}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          handleRecentClick(recentQuery);
-                        }}
-                        className="w-full group/item flex items-center justify-between px-3 py-2 hover:bg-zinc-50 rounded-lg transition-colors text-left"
-                      >
-                        <span className="text-sm text-zinc-700 truncate">
-                          {recentQuery}
-                        </span>
-                        <div
-                          onClick={(e) => handleClearRecent(e, recentQuery)}
-                          className="p-1 opacity-0 group-hover/item:opacity-100 transition-opacity hover:bg-zinc-200 rounded cursor-pointer"
-                          role="button"
-                        >
-                          <X className="w-3 h-3 text-zinc-400" />
-                        </div>
-                      </motion.button>
-                    ))}
-                  </div>
+              <div className="mb-2">
+                <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider px-3 py-2 flex items-center gap-2">
+                  <Clock className="w-3 h-3" />
+                  Pesquisas Recentes
                 </div>
-              )}
+                <div className="space-y-1">
+                  {recentSearches.map((recentQuery, idx) => (
+                    <motion.button
+                      key={`recent-${idx}`}
+                      initial={{ opacity: 0, x: -4 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -4 }}
+                      transition={{ delay: idx * 0.03 }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleRecentClick(recentQuery);
+                      }}
+                      className="w-full group/item flex items-center justify-between px-3 py-2 hover:bg-zinc-50 rounded-lg transition-colors text-left"
+                    >
+                      <span className="text-sm text-zinc-700 truncate">{recentQuery}</span>
+                      <div
+                        onClick={(e) => handleClearRecent(e, recentQuery)}
+                        className="p-1 opacity-0 group-hover/item:opacity-100 transition-opacity hover:bg-zinc-200 rounded cursor-pointer"
+                        role="button"
+                      >
+                        <X className="w-3 h-3 text-zinc-400" />
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
