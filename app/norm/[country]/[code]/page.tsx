@@ -5,8 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, BookOpen, Loader2, AlertCircle, Share2, X } from 'lucide-react';
 import Markdown from 'react-markdown';
-// FIX: importar getFullNormContent que agora lê o Supabase primeiro
-import { getFullNormContent } from '@/lib/gemini';
+import { getFullNormContent, checkIfOfficialAction } from '@/lib/gemini';
 
 export default function NormDetailPage() {
   const params = useParams();
@@ -60,41 +59,8 @@ export default function NormDetailPage() {
     // FIX: verificar separadamente se é documento oficial ou IA
     const checkIfOfficial = async () => {
       try {
-        const { supabase } = await import('@/lib/supabase');
-        // Query by code and ensure country match via join if possible
-        const { data } = await supabase
-          .from('norms')
-          .select('id, countries(name)')
-          .eq('code', code)
-          .maybeSingle();
-
-        // If a record exists and countries match, it's official
-        if (data && (data as { id?: unknown }).id) {
-          // if countries name is present, compare it
-          const getCountryName = (d: unknown): string | undefined => {
-            if (!d || typeof d !== 'object') return undefined;
-            const obj = d as Record<string, unknown>;
-            const maybeCountries = obj['countries'];
-            if (Array.isArray(maybeCountries)) {
-              const first = maybeCountries[0];
-              if (first && typeof first === 'object') {
-                const nameVal = (first as Record<string, unknown>)['name'];
-                if (typeof nameVal === 'string') return nameVal;
-              }
-            } else if (maybeCountries && typeof maybeCountries === 'object') {
-              const nameVal = (maybeCountries as Record<string, unknown>)['name'];
-              if (typeof nameVal === 'string') return nameVal;
-            }
-            return undefined;
-          };
-
-          const countryName = getCountryName(data);
-          if (!countryName || countryName === country) {
-            setIsAIGenerated(false);
-            return;
-          }
-        }
-        setIsAIGenerated(true);
+        const isOfficial = await checkIfOfficialAction(country, code);
+        setIsAIGenerated(!isOfficial);
       } catch {
         // silencioso
       }

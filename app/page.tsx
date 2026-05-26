@@ -10,7 +10,7 @@ import NormDisplay from '@/components/NormDisplay';
 import SearchRateLimitDisplay from '@/components/SearchRateLimitDisplay';
 import { RateLimitModal } from '@/components/RateLimitModal';
 import { getArchitecturalNorms, Norm, updateNorm, getActiveCountries } from '@/lib/gemini';
-import { supabase } from '@/lib/supabase';
+import { getSessionAction, logoutAction } from '@/app/actions/auth-actions';
 import { useRouter } from 'next/navigation';
 import { searchNormsSemantic, SearchResult, deleteNormServer } from '@/app/actions/norm-actions';
 import { toast } from 'sonner';
@@ -34,8 +34,6 @@ const CATEGORIES = [
   "Acessibilidade", "Instalações Elétricas", "Instalações Hidráulicas",
   "Térmica e Acústica", "Materiais", "Sustentabilidade", "Apresentação/Desenho"
 ] as const;
-
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'seantomasytbr@gmail.com';
 
 interface SupabaseUser {
   id: string;
@@ -110,10 +108,10 @@ export default function Home() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          setUser(session.user);
-          setIsAdmin(session.user.email === ADMIN_EMAIL);
+        const res = await getSessionAction();
+        if (res.success && res.session) {
+          setUser(res.user as unknown as SupabaseUser);
+          setIsAdmin(res.isAdmin);
         }
       } catch (err) {
         console.error('Session check error:', err);
@@ -128,21 +126,7 @@ export default function Home() {
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setUser(session.user);
-        setIsAdmin(session.user.email === ADMIN_EMAIL);
-        setIsAuthModalOpen(false);
-      } else {
-        setUser(null);
-        setIsAdmin(false);
-      }
-      setIsSessionLoading(false);
-      clearTimeout(safetyTimeout);
-    });
-
     return () => {
-      subscription.unsubscribe();
       clearTimeout(safetyTimeout);
     };
   }, []);
@@ -313,7 +297,10 @@ export default function Home() {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      await logoutAction();
+      setUser(null);
+      setIsAdmin(false);
+      window.location.reload();
     } catch (err) {
       console.error('Logout error:', err);
     }

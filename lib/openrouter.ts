@@ -63,7 +63,6 @@ export class OpenRouterClient {
           statusText: response.statusText,
           body: errorText,
           apiKeyPresent: !!this.apiKey,
-          apiKeyLength: this.apiKey?.length || 0
         });
         throw new Error(`OpenRouter API error: ${response.status} - ${response.statusText} - ${errorText.substring(0, 200)}`);
       }

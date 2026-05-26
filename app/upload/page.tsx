@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { FileText, AlertCircle, Loader2, ArrowLeft, Upload, File } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { getSessionAction } from '@/app/actions/auth-actions';
 import { processAndUploadNorm, analyzeDocumentStructureServer } from '@/app/actions/norm-actions';
 import Link from 'next/link';
 import nextDynamic from 'next/dynamic';
@@ -25,25 +25,6 @@ const ReactQuill = nextDynamic(
 // FIX: limite do texto guardado no Supabase (5 MB de texto)
 const MAX_CONTENT_LENGTH = 5 * 1024 * 1024;
 
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'seantomasytbr@gmail.com';
-const PDF_BUCKET_NAME = 'arquiv-files'; // Bucket criado pelo usuário
-
-// Função para gerar nome da pasta baseado no país
-const getCountryFolder = (countryName: string): string => {
-  const countryMap: { [key: string]: string } = {
-    'Brasil': 'brasil',
-    'Portugal': 'portugal',
-    'Estados Unidos': 'estados-unidos',
-    'Reino Unido': 'reino-unido',
-    'Alemanha': 'alemanha',
-    'França': 'franca',
-    'Espanha': 'espanha',
-    'Angola': 'angola',
-    'Moçambique': 'mocambique'
-  };
-  
-  return countryMap[countryName] || countryName.toLowerCase().replace(/\s+/g, '-');
-};
 
 export default function UploadPage() {
   const [normDecree, setNormDecree] = useState('');
@@ -94,12 +75,12 @@ export default function UploadPage() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      const res = await getSessionAction();
+      if (!res.success || !res.session) {
         router.push('/login');
         return;
       }
-      if (session.user.email !== ADMIN_EMAIL) {
+      if (!res.isAdmin) {
         router.push('/');
         return;
       }
@@ -164,51 +145,28 @@ export default function UploadPage() {
           console.warn('[PDF Upload] Análise automática falhou:', analyzeErr);
         }
       }
-
-      const fileName = `${Date.now()}-${file.name}`;
-      const countryFolder = getCountryFolder(country);
-      const filePath = `${countryFolder}/${fileName}`;
-      
-      // Lista de buckets para tentar em ordem
-      const bucketsToTry = [
-        PDF_BUCKET_NAME, // 'arquiv-files' - seu bucket personalizado
-        'arquiv-files',  // garantir que tenta o nome correto
-        'Arquiv',        // tentar com maiúscula
-        'arquiv',        // tentar com minúscula
-        'documents',     // bucket comum para documentos
-        'public',        // bucket público padrão
-        'uploads'        // outro bucket comum
-      ];
-      
       let uploadSuccess = false;
       let finalPublicUrl = '';
       
-      for (const bucketName of bucketsToTry) {
-        try {
-          console.log(`Tentando upload no bucket: ${bucketName}`);
-          
-          const { error: uploadError } = await supabase.storage
-            .from(bucketName)
-            .upload(filePath, file);
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+      uploadFormData.append('country', country);
 
-          if (!uploadError) {
-            // Upload bem-sucedido
-            const { data: { publicUrl } } = supabase.storage
-              .from(bucketName)
-              .getPublicUrl(filePath);
-            
-            finalPublicUrl = publicUrl;
-            uploadSuccess = true;
-            console.log(`Upload bem-sucedido no bucket: ${bucketName}`);
-            break;
-          } else {
-            console.log(`Bucket ${bucketName} falhou:`, uploadError.message);
-          }
-        } catch (bucketError) {
-          console.log(`Erro ao tentar bucket ${bucketName}:`, bucketError);
-          continue;
-        }
+      console.log('[Upload] A enviar PDF para API de upload seguro...');
+      const uploadRes = await fetch('/api/upload-pdf', {
+        method: 'POST',
+        body: uploadFormData
+      });
+
+      const uploadData = await uploadRes.json();
+
+      if (!uploadRes.ok || !uploadData.success) {
+        throw new Error(uploadData.error || 'Erro ao carregar ficheiro para o servidor.');
       }
+
+      finalPublicUrl = uploadData.publicUrl;
+      uploadSuccess = true;
+      console.log('[Upload] Upload efetuado com sucesso via API:', finalPublicUrl);
       
       if (!uploadSuccess) {
         throw new Error('Nenhum bucket disponível para upload. Verifique se os buckets "arquiv-files", "Arquiv", "arquiv", "documents", "public" ou "uploads" existem no Supabase Storage.');
@@ -319,10 +277,11 @@ export default function UploadPage() {
     }
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || user.email !== ADMIN_EMAIL) {
+      const res = await getSessionAction();
+      if (!res.success || !res.user || !res.isAdmin) {
         throw new Error('Apenas administradores podem adicionar normas.');
       }
+      const user = res.user;
 
       // Usar categorias e palavras-chave automáticas se disponíveis
       const finalCategory = autoCategories.length > 0 ? autoCategories[0] : category;

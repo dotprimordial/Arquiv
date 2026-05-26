@@ -2,12 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, LogIn, Globe } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { getAuthRedirectUrl } from '@/lib/auth-utils';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { loginAction, getGoogleOAuthUrlAction } from '@/app/actions/auth-actions';
+import { useSearchParams } from 'next/navigation';
 
 export default function SignIn({ onToggle, onClose }: { onToggle: () => void; onClose?: () => void }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,17 +30,11 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
     setIsLoading(true);
     setError('');
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: getAuthRedirectUrl(),
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        },
-      });
-      if (error) throw error;
+      const res = await getGoogleOAuthUrlAction();
+      if (!res.success || !res.url) {
+        throw new Error(res.error || 'Não foi possível obter URL do Google OAuth.');
+      }
+      window.location.href = res.url;
     } catch (err: unknown) {
       console.error('[SignIn Google] Error:', err);
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -62,18 +54,16 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
     setError(null);
     setSuccessMessage(null);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const res = await loginAction(email, password);
       
-      if (error) throw error;
+      if (!res.success) {
+        throw new Error(res.error || 'Credenciais inválidas.');
+      }
       
-      if (data.session) {
+      if (res.session) {
         // Fechar modal antes de redirecionar
         if (onClose) onClose();
-        // Only redirect if a real session exists
-        router.push('/');
+        window.location.reload();
       } else {
         setError('Sessão não iniciada. Verifique o seu email.');
       }
@@ -90,7 +80,7 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
       } else if (err instanceof Error) {
         // Check for common Supabase auth errors
         const message = errorMessage.toLowerCase();
-        if (message.includes('invalid login credentials')) {
+        if (message.includes('invalid login credentials') || message.includes('credentials') || message.includes('password')) {
           setError('Email ou palavra-passe incorretos.');
         } else if (message.includes('email not confirmed')) {
           setError('A sua conta ainda não foi confirmada. Verifique o seu email.');

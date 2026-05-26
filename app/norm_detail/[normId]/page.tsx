@@ -7,7 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, BookOpen, Loader2, AlertCircle, Share2, X } from 'lucide-react';
 import Markdown from 'react-markdown';
-import { getFullNormContentById } from '@/lib/gemini';
+import { getFullNormContentById, getNormMetadataById } from '@/lib/gemini';
 
 export default function NormDetailPage() {
   const params = useParams();
@@ -51,12 +51,7 @@ export default function NormDetailPage() {
 
     const checkIfOfficial = async () => {
       try {
-        const { supabase } = await import('@/lib/supabase');
-        const { data } = await supabase
-          .from('norms')
-          .select('id, code, title, country')
-          .eq('id', normId)
-          .maybeSingle();
+        const data = await getNormMetadataById(normId);
         setIsAIGenerated(!data);
         if (data) {
           setNormData(data);

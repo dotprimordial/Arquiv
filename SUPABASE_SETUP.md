@@ -43,7 +43,7 @@ No arquivo `.env.local` do projeto:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=sua_url_do_supabase
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_chave_anon
-NEXT_PUBLIC_OPENROUTER_API_KEY=sua_chave_openrouter
+OPENROUTER_API_KEY=sua_chave_openrouter
 ```
 
 ## Passo 5: Testar a Configuração

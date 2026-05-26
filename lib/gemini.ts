@@ -1,5 +1,7 @@
+'use server';
+
 import OpenRouterClient, { OpenRouterMessage } from "./openrouter";
-import { supabase } from "./supabase";
+import { getAuthenticatedSupabaseClient } from "./supabase-server";
 import { processSearchQuery, calculateSearchScore } from './search-utils';
 
 // Prefer server-side key. Avoid exposing API keys to client bundles.
@@ -71,6 +73,7 @@ export const getArchitecturalNorms = async (
   page: number = 1,
   pageSize: number = 10
 ): Promise<{ norms: Norm[]; totalCount: number }> => {
+  const supabase = await getAuthenticatedSupabaseClient();
   const cacheKey = `norms:${country}:${category}:${queryText || 'all'}:${useAi}:${page}:${pageSize}`;
   
   // Check cache first (5 minutes TTL for search results)
@@ -379,6 +382,7 @@ Responda APENAS com JSON válido, sem markdown:
 };
 
 export const getFullNormContent = async (country: string, code: string): Promise<string> => {
+  const supabase = await getAuthenticatedSupabaseClient();
   console.log(`Buscando conteúdo para norma ${code} do país ${country}`);
 
   try {
@@ -418,6 +422,7 @@ export const getFullNormContent = async (country: string, code: string): Promise
 };
 
 export const getFullNormContentById = async (normId: string): Promise<string> => {
+  const supabase = await getAuthenticatedSupabaseClient();
   console.log(`[getFullNormContentById] Buscando norma pelo ID: ${normId}`);
 
   try {
@@ -453,6 +458,7 @@ export const getFullNormContentById = async (normId: string): Promise<string> =>
 // FIX #7: deleteNorm movida para server action (ver norm-actions.ts)
 // Esta versão client-side é mantida apenas como fallback e pode falhar com RLS
 export const deleteNorm = async (id: string) => {
+  const supabase = await getAuthenticatedSupabaseClient();
   const { error } = await supabase.from("norms").delete().eq("id", id);
   if (error) {
     console.error("[deleteNorm] Erro ao deletar:", error);
@@ -462,6 +468,7 @@ export const deleteNorm = async (id: string) => {
 };
 
 export const updateNorm = async (id: string, updates: Partial<Norm>) => {
+  const supabase = await getAuthenticatedSupabaseClient();
   const { data, error } = await supabase
     .from("norms")
     .update(updates)
@@ -473,6 +480,7 @@ export const updateNorm = async (id: string, updates: Partial<Norm>) => {
 };
 
 export const getActiveCountries = async (): Promise<string[]> => {
+  const supabase = await getAuthenticatedSupabaseClient();
   const cacheKey = 'activeCountries';
   
   // Check cache first
@@ -513,5 +521,46 @@ export const getActiveCountries = async (): Promise<string[]> => {
   } catch (err) {
     console.error("Connection error fetching countries:", err);
     return [];
+  }
+};
+
+export const getNormMetadataById = async (normId: string) => {
+  try {
+    const supabase = await getAuthenticatedSupabaseClient();
+    const { data, error } = await supabase
+      .from("norms")
+      .select("id, code, title, country")
+      .eq("id", normId)
+      .maybeSingle();
+      
+    if (error || !data) return null;
+    return data as { id: string; code: string; title: string; country: string };
+  } catch {
+    return null;
+  }
+};
+
+export const checkIfOfficialAction = async (country: string, code: string): Promise<boolean> => {
+  try {
+    const supabase = await getAuthenticatedSupabaseClient();
+    
+    const { data: countryData } = await supabase
+      .from("countries")
+      .select("id")
+      .eq("name", country)
+      .single();
+
+    if (!countryData) return false;
+
+    const { data } = await supabase
+      .from('norms')
+      .select('id')
+      .eq('code', code)
+      .eq('country_id', countryData.id)
+      .maybeSingle();
+
+    return !!data;
+  } catch {
+    return false;
   }
 };

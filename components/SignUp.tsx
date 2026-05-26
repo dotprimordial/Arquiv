@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import { Mail, Lock, UserPlus, Globe } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { getAuthRedirectUrl } from '@/lib/auth-utils';
+import { signUpAction, getGoogleOAuthUrlAction } from '@/app/actions/auth-actions';
 import { useRouter } from 'next/navigation';
 
 export default function SignUp({ onToggle, onClose }: { onToggle: () => void; onClose?: () => void }) {
@@ -17,17 +16,11 @@ export default function SignUp({ onToggle, onClose }: { onToggle: () => void; on
     setIsLoading(true);
     setError(null);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: getAuthRedirectUrl(),
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        },
-      });
-      if (error) throw error;
+      const res = await getGoogleOAuthUrlAction();
+      if (!res.success || !res.url) {
+        throw new Error(res.error || 'Não foi possível obter URL do Google OAuth.');
+      }
+      window.location.href = res.url;
     } catch (err: unknown) {
       console.error('[SignUp Google] Error:', err);
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -46,24 +39,20 @@ export default function SignUp({ onToggle, onClose }: { onToggle: () => void; on
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+      const res = await signUpAction(email, password);
       
-      if (error) throw error;
+      if (!res.success) {
+        throw new Error(res.error || 'Erro ao efetuar registo.');
+      }
       
-      // If data.session is null, don't redirect to dashboard
-      if (!data.session) {
-        // Redirect to sign in page with email pre-fill and success message
+      // If res.session is null, email confirmation might be required
+      if (!res.session) {
+        // Redirect to sign in page with pre-fill and success message
         router.push(`/login?email=${encodeURIComponent(email)}&signup=success`);
-        // If it's a modal, we might need to handle it differently
-        // But the user says "Redirect the user to the Sign In page"
         onToggle(); // Switch to sign in view
       } else {
-        // If auto-login is enabled (unlikely with email confirmation)
         if (onClose) onClose();
-        router.push('/');
+        window.location.reload();
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));

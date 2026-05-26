@@ -249,7 +249,9 @@ export async function processAndUploadNorm(
     // Clean HTML before checking length
     const cleanedContent = cleanHtmlFormatting(contentToSummarize);
     console.log(`[processAndUploadNorm] Summary check: originalLength=${contentToSummarize.length}, cleanedLength=${cleanedContent.length}, apiKeyConfigured=${!!apiKey && apiKey.length > 10}`);
-    console.log(`[processAndUploadNorm] API Key value: ${apiKey ? apiKey.substring(0, 10) + '...' : 'NOT SET'}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[processAndUploadNorm] API Key: ${apiKey ? '✓' : 'NOT SET'}`);
+    }
 
     if (cleanedContent && cleanedContent.length > 100 && apiKey && apiKey.length > 10) {
       try {

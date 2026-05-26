@@ -89,7 +89,9 @@ export async function checkRateLimit(
 
 
 
-    console.log('[checkRateLimit] dayCount:', dayCount, 'dailyLimit:', dailyLimit, 'dayError:', dayError);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[checkRateLimit] dayCount:', dayCount, 'dailyLimit:', dailyLimit, 'dayError:', dayError);
+    }
 
     // Check daily limit
     // Fallback dayCount to 0 if null
@@ -145,7 +147,9 @@ export async function recordSearch(
     });
 
   if (error) {
-    console.log('[recordSearch] Called with', { ipAddress, searchType, query, country, userId });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[recordSearch] Called with', { ipAddress, searchType, query, country, userId });
+    }
     throw new Error(`[recordSearch] Error recording search: ${error.message}`);
   }
 }
@@ -203,7 +207,11 @@ export async function resetRateLimit(ipAddress: string): Promise<void> {
       throw new Error(`Failed to reset rate limit: ${error.message}`);
     }
 
-    console.log(`[resetRateLimit] Rate limit reset for IP ${ipAddress}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[resetRateLimit] Rate limit reset for IP ${ipAddress}`);
+    } else {
+      console.log('[resetRateLimit] Rate limit reset successfully');
+    }
   } catch (error) {
     console.error('[resetRateLimit] Error:', error);
     throw error;

@@ -54,7 +54,7 @@
    Configure as seguintes variáveis:
    ```env
    # OpenRouter API Key
-   NEXT_PUBLIC_OPENROUTER_API_KEY="sua-chave-openrouter"
+   OPENROUTER_API_KEY="sua-chave-openrouter"
    
    # Supabase Configuration
    NEXT_PUBLIC_SUPABASE_URL="https://seu-projeto.supabase.co"
