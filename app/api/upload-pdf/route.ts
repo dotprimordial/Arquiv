@@ -1,6 +1,8 @@
 import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
 
+export const runtime = 'edge';
+
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'seantomasytbr@gmail.com';
 const PDF_BUCKET_NAME = 'arquiv-files';
 
