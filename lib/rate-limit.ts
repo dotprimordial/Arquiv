@@ -71,6 +71,14 @@ export async function checkRateLimit(
       countQuery = countQuery.eq('ip_address', ipAddress);
     }
 
+    // Separate limits for visits/browsing vs actual searches
+    if (searchType === 'visit' || searchType === 'browse') {
+      countQuery = countQuery.eq('search_type', searchType);
+      dailyLimit = 5000; // Generous limit for non-search actions
+    } else {
+      countQuery = countQuery.in('search_type', ['semantic', 'keyword']);
+    }
+
     const { count: dayCount, error: dayError } = await countQuery;
 
     if (dayError && dayError.code !== 'PGRST200') {
@@ -153,7 +161,8 @@ export async function getSearchStats(ipAddress: string) {
 
     const { data: stats, error } = await supabase
       .from('search_usage')
-      .select('search_type, searched_at', { count: 'exact' })
+      .select('search_type, searched_at')
+      .in('search_type', ['semantic', 'keyword'])
       .eq('ip_address', ipAddress);
 
     if (error) {
