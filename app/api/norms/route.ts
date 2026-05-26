@@ -1,6 +1,8 @@
 import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
 import { checkRateLimit, recordSearch } from '@/lib/rate-limit';
 
+export const runtime = 'edge';
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
