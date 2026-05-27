@@ -27,46 +27,94 @@ const PORTUGUESE_STOP_WORDS = new Set([
 // Domain-specific synonym mappings for architectural/urban planning terms
 const SYNONYM_MAPPINGS: Record<string, string[]> = {
   // Solo/território
-  'solo': ['solo', 'terreno', 'territorio', 'terreno', 'chao', 'solo'],
-  'ocupação': ['ocupacao', 'uso', 'utilizacao', 'emprego', 'aproveitamento'],
-  'uso': ['uso', 'utilizacao', 'emprego', 'aproveitamento', 'ocupacao'],
-  'zoneamento': ['zoneamento', 'zonas', 'zonificacao', 'classificacao', 'categorias'],
-  'urbanismo': ['urbanismo', 'urbanizacao', 'cidade', 'urbano', 'municipal'],
-  'território': ['territorio', 'area', 'espaco', 'regiao', 'local'],
-  
+  'solo': ['solo', 'terreno', 'territorio', 'terreno', 'chao', 'solo', 'lote', 'parcela'],
+  'ocupação': ['ocupacao', 'uso', 'utilizacao', 'emprego', 'aproveitamento', 'ocupacao'],
+  'uso': ['uso', 'utilizacao', 'emprego', 'aproveitamento', 'ocupacao', 'destinacao'],
+  'zoneamento': ['zoneamento', 'zonas', 'zonificacao', 'classificacao', 'categorias', 'zonas'],
+  'urbanismo': ['urbanismo', 'urbanizacao', 'cidade', 'urbano', 'municipal', 'planejamento'],
+  'território': ['territorio', 'area', 'espaco', 'regiao', 'local', 'lote'],
+  'lote': ['lote', 'parcela', 'terreno', 'solo', 'gleba'],
+
   // Construção/edificação
-  'construção': ['construcao', 'edificacao', 'obra', 'edificio', 'estrutura'],
-  'edificação': ['edificacao', 'construcao', 'obra', 'edificio', 'predio'],
-  'obra': ['obra', 'construcao', 'edificacao', 'trabalho', 'projeto'],
-  'edifício': ['edificio', 'predio', 'construcao', 'edificacao', 'bloco'],
-  'prédio': ['predio', 'edificio', 'bloco', 'construcao'],
-  
+  'construção': ['construcao', 'edificacao', 'obra', 'edificio', 'estrutura', 'empreendimento'],
+  'edificação': ['edificacao', 'construcao', 'obra', 'edificio', 'predio', 'empreendimento'],
+  'obra': ['obra', 'construcao', 'edificacao', 'trabalho', 'projeto', 'empreendimento'],
+  'edifício': ['edificio', 'predio', 'construcao', 'edificacao', 'bloco', 'torre'],
+  'prédio': ['predio', 'edificio', 'bloco', 'construcao', 'estrutura'],
+  'estrutura': ['estrutura', 'armacao', 'esqueleto', 'construcao', 'fundacao'],
+  'fundação': ['fundacao', 'alicerce', 'estrutura', 'base', 'estaqueamento'],
+
   // Segurança
-  'segurança': ['seguranca', 'protecao', 'defesa', 'risco', 'perigo'],
-  'incêndio': ['incendio', 'fogo', 'combustao', 'queimadura', 'safety'],
-  'risco': ['risco', 'perigo', 'ameaca', 'vulnerabilidade'],
-  
+  'segurança': ['seguranca', 'protecao', 'defesa', 'risco', 'perigo', 'prevencao'],
+  'incêndio': ['incendio', 'fogo', 'combustao', 'queimadura', 'safety', 'prevencao'],
+  'risco': ['risco', 'perigo', 'ameaca', 'vulnerabilidade', 'seguranca'],
+  'proteção': ['protecao', 'seguranca', 'defesa', 'prevencao', 'resistencia'],
+  'evacuação': ['evacuacao', 'fuga', 'saida', 'rota', 'passagem'],
+
   // Altura/dimensões
-  'altura': ['altura', 'elevacao', 'comprimento', 'nivel', 'piso'],
-  'largura': ['largura', 'extensao', 'dimensao', 'tamanho'],
-  'área': ['area', 'espaco', 'superficie', 'metragem', 'tamanho'],
-  
+  'altura': ['altura', 'elevacao', 'comprimento', 'nivel', 'piso', 'pavimento'],
+  'largura': ['largura', 'extensao', 'dimensao', 'tamanho', 'amplitude'],
+  'profundidade': ['profundidade', 'dimensao', 'espessura', 'tamanho'],
+  'área': ['area', 'espaco', 'superficie', 'metragem', 'tamanho', 'extensao'],
+  'coeficiente': ['coeficiente', 'indice', 'taxa', 'proporcao', 'relacao'],
+  'recuo': ['recuo', 'afastamento', 'distancia', 'margem', 'espaco'],
+  'gabarito': ['gabarito', 'altura', 'limite', 'restricao', 'padrao'],
+
   // Estacionamento
-  'estacionamento': ['estacionamento', 'parqueamento', 'vagas', 'garagem', 'parking'],
-  'vaga': ['vaga', 'lugar', 'espaco', 'garagem'],
-  
+  'estacionamento': ['estacionamento', 'parqueamento', 'vagas', 'garagem', 'parking', 'parada'],
+  'vaga': ['vaga', 'lugar', 'espaco', 'garagem', 'parada'],
+  'garagem': ['garagem', 'estacionamento', 'parqueamento', 'vaga'],
+
   // Acessibilidade
-  'acessibilidade': ['acessibilidade', 'acesso', 'inclusao', 'adaptacao'],
-  'acesso': ['acesso', 'entrada', 'saida', 'portao', 'porta'],
-  
+  'acessibilidade': ['acessibilidade', 'acesso', 'inclusao', 'adaptacao', 'mobilidade'],
+  'acesso': ['acesso', 'entrada', 'saida', 'portao', 'porta', 'passagem'],
+  'rota': ['rota', 'caminho', 'percurso', 'trajetoria', 'passagem'],
+  'elevador': ['elevador', 'ascensor', 'plataforma', 'acessibilidade'],
+  'rampa': ['rampa', 'declividade', 'inclinacao', 'acesso', 'acessibilidade'],
+
   // Energia/instalações
-  'energia': ['energia', 'eletricidade', 'potencia', 'consumo'],
-  'água': ['agua', 'hidraulica', 'abastecimento', 'esgoto'],
-  'gás': ['gas', 'gasoduto', 'combustivel'],
-  
-  // Documentação
-  'projeto': ['projeto', 'plano', 'desenho', 'planta', 'especificacao'],
-  'licença': ['licenca', 'autorizacao', 'alvara', 'permissao'],
+  'energia': ['energia', 'eletricidade', 'potencia', 'consumo', 'fornecimento'],
+  'água': ['agua', 'hidraulica', 'abastecimento', 'esgoto', 'fornecimento'],
+  'esgoto': ['esgoto', 'agua', 'drenagem', 'sanitario', 'coleta'],
+  'drenagem': ['drenagem', 'esgoto', 'escoamento', 'agua', 'infiltracao'],
+  'gás': ['gas', 'gasoduto', 'combustivel', 'fornecimento'],
+  'iluminação': ['iluminacao', 'luz', 'eletricidade', 'luminancia', 'intensidade'],
+  'ventilação': ['ventilacao', 'ar', 'circulacao', 'fluxo', 'ambiente'],
+  'clima': ['clima', 'ar', 'condicao', 'temperatura', 'umidade'],
+
+  // Documentação/procedimentos
+  'projeto': ['projeto', 'plano', 'desenho', 'planta', 'especificacao', 'proposta'],
+  'licença': ['licenca', 'autorizacao', 'alvara', 'permissao', 'aprovacao'],
+  'alvarã': ['alvara', 'licenca', 'autorizacao', 'permissao'],
+  'aprovação': ['aprovacao', 'licenca', 'autorizacao', 'visto', 'aval'],
+  'apresentação': ['apresentacao', 'desenho', 'planta', 'projeto', 'documento'],
+  'planta': ['planta', 'desenho', 'projeto', 'esquema', 'layout'],
+
+  // Classificação/categorias
+  'residencial': ['residencial', 'habitacao', 'casa', 'apartamento', 'moradia'],
+  'comercial': ['comercial', 'comercio', 'loja', 'negocio', 'varejo'],
+  'industrial': ['industrial', 'industria', 'fabrica', 'producao'],
+  'institucional': ['institucional', 'publica', 'governo', 'administracao'],
+  'misto': ['misto', 'uso', 'multiplo', 'combinado'],
+
+  // Materiais
+  'concreto': ['concreto', 'hormigao', 'cimento', 'argamassa'],
+  'aço': ['aco', 'metal', 'ferro', 'estrutura'],
+  'tijolos': ['tijolos', 'blocos', 'alvenaria', 'cerâmica'],
+  'vidro': ['vidro', 'cristal', 'transparencia', 'translucido'],
+  'madeira': ['madeira', 'lenho', 'carpintaria', 'elementos'],
+
+  // Conforto/qualidade
+  'conforto': ['conforto', 'qualidade', 'bem-estar', 'ambiente', 'experiencia'],
+  'acústica': ['acustica', 'som', 'ruido', 'isolamento', 'ambiente'],
+  'térmica': ['termica', 'temperatura', 'isolamento', 'clima', 'conforto'],
+
+  // Limites/restrições
+  'limite': ['limite', 'maximo', 'restricao', 'proibicao', 'impedimento'],
+  'máximo': ['maximo', 'limite', 'restricao', 'superior', 'topo'],
+  'mínimo': ['minimo', 'limite', 'inferior', 'base', 'requisito'],
+  'exigência': ['exigencia', 'requisito', 'obrigacao', 'necessidade', 'demanda'],
+  'proibição': ['proibicao', 'veto', 'impedimento', 'restricao', 'limite'],
 };
 
 /**
@@ -161,6 +209,66 @@ export function calculateSearchScore(
   }
   
   return score;
+}
+
+/**
+ * Analyze query intent and extract semantic context
+ * Returns structured information about what the user is looking for
+ */
+export function analyzeQueryIntent(query: string): {
+  intent: 'requirement' | 'limit' | 'method' | 'definition' | 'comparison' | 'procedure' | 'classification';
+  keywords: string[];
+  concepts: string[];
+  constraints: string[];
+  suggestedSynonyms: string[];
+} {
+  // Detect intent from question patterns
+  let intent: 'requirement' | 'limit' | 'method' | 'definition' | 'comparison' | 'procedure' | 'classification' = 'definition';
+
+  if (/^(qual|quantos?|quanto|o que|quais?)\s+(deve|é|são|eram|podem|precisa|exig|requer|necessita)/i.test(query)) {
+    intent = 'requirement';
+  } else if (/maximo|minimo|limite|máxima|mínima|acima|abaixo|superio|inferior|meno|mai/i.test(query)) {
+    intent = 'limit';
+  } else if (/como|de que forma|por que|onde|qual|a forma|procedimento|passo|processo/i.test(query)) {
+    intent = 'method';
+  } else if (/que é|o que é|significado|definição|conceito|significa/i.test(query)) {
+    intent = 'definition';
+  } else if (/comparacao|diferenca|comparar|mais|menos|maior|menor|diferente/i.test(query)) {
+    intent = 'comparison';
+  } else if (/como fazer|passos|etapas|procedimento|processo|sequência/i.test(query)) {
+    intent = 'procedure';
+  } else if (/tipos|categorias|classificacao|classes|grupos|tipos|espécies/i.test(query)) {
+    intent = 'classification';
+  }
+
+  const keywords = extractKeywords(query);
+  const expanded = expandTerms(keywords);
+
+  // Extract constraints mentioned in query
+  const constraints: string[] = [];
+  if (/maximo/i.test(query)) constraints.push('maximum');
+  if (/minimo/i.test(query)) constraints.push('minimum');
+  if (/proibid/i.test(query)) constraints.push('prohibited');
+  if (/obrigatorio|exigido|requerido/i.test(query)) constraints.push('required');
+  if (/opcional|facultativo|voluntario/i.test(query)) constraints.push('optional');
+  if (/transitorio|temporario|provisorio/i.test(query)) constraints.push('temporary');
+
+  // Build suggested synonyms based on keywords
+  const suggestedSynonyms = new Set<string>();
+  keywords.forEach(kw => {
+    const syns = SYNONYM_MAPPINGS[kw];
+    if (syns) {
+      syns.forEach(s => suggestedSynonyms.add(s));
+    }
+  });
+
+  return {
+    intent,
+    keywords,
+    concepts: expanded,
+    constraints,
+    suggestedSynonyms: Array.from(suggestedSynonyms),
+  };
 }
 
 /**

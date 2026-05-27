@@ -7,7 +7,7 @@ import { analyzeDocumentStructure, chunkDocument, generateSectionEmbeddings } fr
 import { checkRateLimit, recordSearch } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import OpenRouterClient, { OpenRouterMessage } from '@/lib/openrouter';
-import { processSearchQuery } from '@/lib/search-utils';
+import { processSearchQuery, analyzeQueryIntent } from '@/lib/search-utils';
 
 const apiKey = process.env.OPENROUTER_API_KEY || '';
 
@@ -929,6 +929,14 @@ export async function searchNormsSemantic(
 ): Promise<SearchResult[]> {
   console.log('[searchNormsSemantic] Iniciando busca com IA:', { query, country, limit });
 
+  // Analyze query intent to improve semantic understanding
+  const queryAnalysis = analyzeQueryIntent(query);
+  console.log('[searchNormsSemantic] Query analysis:', {
+    intent: queryAnalysis.intent,
+    keywords: queryAnalysis.keywords.slice(0, 5),
+    constraints: queryAnalysis.constraints,
+  });
+
   // Check cache first
   const cacheKey = generateSearchCacheKey('semantic', query, country, undefined, limit);
   const cached = getCachedSearch<SearchResult[]>(cacheKey);
@@ -1059,32 +1067,45 @@ export async function searchNormsSemantic(
     }));
 
     // Call AI to identify relevant norms based on summaries
-    const summaryPrompt = `Você é um especialista em normas arquitetônicas.
+    const summaryPrompt = `Você é um especialista em normas arquitetônicas com profundo conhecimento em:
+- Planejamento urbano e zoneamento
+- Legislação de construção e edificação
+- Acessibilidade e segurança
+- Uso do solo e ocupação
+- Classificação de usos (residencial, comercial, industrial, etc.)
 
-Consulta: "${cleanedQuery}" | País: ${country || 'Todos'}
+ANÁLISE CONTEXTUAL DA CONSULTA:
+Consulta: "${cleanedQuery}"
+País: ${country || 'Todos'}
+Intenção: ${queryAnalysis.intent}
+Restrições mencionadas: ${queryAnalysis.constraints.join(', ') || 'nenhuma'}
 
-Resumos das normas disponíveis (${summariesForAI.length}):
+ETAPA 1 - IDENTIFIQUE A INTENÇÃO:
+1. Qual é o CONCEITO PRINCIPAL da pergunta? (ex: dimensões, segurança, ocupação, etc.)
+2. Quais RESTRIÇÕES ou LIMITES são mencionados? (máximo, mínimo, proibição, etc.)
+3. Qual CATEGORIA DE USO é relevante? (residencial, comercial, industrial, etc.)
+4. Qual é o CONTEXTO TÉCNICO? (estrutura, instalações, materiais, etc.)
+
+ETAPA 2 - MAPEIE PARA CONCEITOS TÉCNICOS:
+- Sinônimos: ocupação → uso, aproveitamento, destinação
+- Termos relacionados: área → dimensão, metragem, tamanho
+- Variações: altura → elevação, andares, pavimentos
+- Conceitos derivados: segurança → proteção, prevencao, risco
+
+ETAPA 3 - CLASSIFIQUE RELEVÂNCIA (ALTA/MÉDIA/BAIXA):
+- ALTA: Trata diretamente do conceito principal
+- MÉDIA: Trata de conceitos relacionados ou dependentes
+- BAIXA: Tangencial ou remoto
+
+NORMAS DISPONÍVEIS (${summariesForAI.length}):
 ${JSON.stringify(summariesForAI, null, 2)}
 
-INSTRUÇÕES:
-1. Leia a CONSULTA do usuário: "${cleanedQuery}"
-2. Analise os RESUMOS das normas
-3. INTERPRETE A CONSULTA SEMANTICAMENTE (não literalmente):
-   - Entenda a INTENÇÃO por trás da pergunta
-   - Traduza para CONCEITOS TÉCNICOS relevantes
-   - Considere SINÔNIMOS e termos relacionados
-   - Busque por SIGNIFICADO, não por correspondência literal de palavras
-4. Identifique quais normas são RELEVANTES para a consulta
-5. Uma norma é relevante se tratar do CONCEITO, mesmo que não use as palavras exatas
-6. Retorne APENAS os IDs das normas relevantes em formato JSON array
-7. Se nenhuma norma for relevante, retorne array vazio []
-8. NÃO inclua explicações, apenas os IDs
-
-EXEMPLO DE INTERPRETAÇÃO SEMÂNTICA:
-- Consulta: "qual deve ser a area maxima do ocupaçãao dos lotes"
-- Intenção: Descobrir limites de dimensão para lotes
-- Conceitos técnicos: área, ocupação, lote, dimensão, tamanho, máximo, limite, coeficiente de ocupação
-- Buscar por: qualquer menção a área de lotes, dimensões máximas, coeficiente de ocupação, etc.
+INSTRUÇÕES FINAIS:
+1. Identifique normas com relevância ALTA e MÉDIA
+2. Exclua normas com relevância BAIXA
+3. Retorne APENAS os IDs das normas relevantes
+4. Se nenhuma for relevante, retorne array vazio []
+5. Ordene por relevância (ALTA primeiro)
 
 Retorne neste formato:
 {
@@ -1150,51 +1171,79 @@ Retorne neste formato:
     const messages: Array<{ role: string; content: string }> = [
       {
         role: "user",
-        content: `Você é um especialista em normas arquitetônicas.
+        content: `Você é um especialista em normas arquitetônicas com profundo conhecimento em legislação construtiva.
 
-Consulta: "${cleanedQuery}" | País: ${country || 'Todos'}
+CONTEXTO DA CONSULTA:
+Consulta: "${cleanedQuery}"
+País: ${country || 'Todos'}
+Intenção: ${queryAnalysis.intent}
+Restrições: ${queryAnalysis.constraints.join(', ') || 'nenhuma'}
 
-Normas para análise (${normsForAI.length}):
+TERMOS RELACIONADOS A BUSCAR:
+- Conceitos principais: ${queryAnalysis.keywords.join(', ')}
+- Sinônimos e variações: ${queryAnalysis.suggestedSynonyms.join(', ')}
+
+ANÁLISE CONTEXTUAL:
+1. IDENTIFIQUE A INTENÇÃO: O que o usuário realmente quer saber?
+2. CONCEITOS TÉCNICOS: Quais são os termos técnicos relacionados?
+3. SINÔNIMOS: Que variações desses termos devem ser procuradas?
+
+NORMAS PARA ANÁLISE (${normsForAI.length}):
 ${JSON.stringify(normsForAI, null, 2)}
 
-INSTRUÇÕES CRÍTICAS:
-1. Leia a CONSULTA do usuário: "${cleanedQuery}"
-2. INTERPRETE A CONSULTA SEMANTICAMENTE (não literalmente):
-   - Entenda a INTENÇÃO por trás da pergunta
-   - Traduza para CONCEITOS TÉCNICOS relevantes
-   - Considere SINÔNIMOS e termos relacionados
-   - Busque por SIGNIFICADO, não por correspondência literal de palavras
-3. Leia o CONTEÚDO COMPLETO de cada norma
-4. Encontre TODOS os artigos que respondem DIRETAMENTE à consulta
-5. Extraia artigos específicos com localização exata (artigo, capítulo, parágrafo)
-6. O campo "excerpt" DEVE conter a CITAÇÃO LITERAL E EXATA da norma:
-   - 300-500 caracteres no máximo
-   - NUNCA adicione, modifique ou resuma o texto. Use as palavras exatas do documento.
-   - NÃO adicione manualmente identificadores (ex: "Art. 5º") dentro do texto do excerpt se não fizerem parte do trecho extraído.
-7. Como encontrar o artigo correto:
-   - NÃO procure apenas palavras-chave literais
-   - Identifique seções que tratam do CONCEITO relacionado à consulta
-   - Considere variações terminológicas (ex: "área máxima" pode aparecer como "dimensão máxima", "tamanho limite", etc.)
-   - Extraia apenas a parte relevante
-8. Se um documento tiver MÚLTIPLOS TRECHOS relevantes em partes distintas do texto, inclua um objeto SEPARADO para cada trecho. O mesmo "id" pode (e deve) aparecer mais de uma vez no array quando houver múltiplas secções relevantes.
-9. Extraia a localização exata do trecho no documento e preencha os campos de hierarquia (artigo, capitulo, titulo) separadamente do texto.
-10. Retorne APENAS JSON válido (array):
+INSTRUÇÕES CRÍTICAS PARA EXTRAÇÃO:
+
+1. INTERPRETAÇÃO SEMÂNTICA (não literal):
+   - Procure pela INTENÇÃO da pergunta, não apenas palavras-chave
+   - Exemplo: "qual a area maxima" pode aparecer como "máximo de ocupação", "limite de área", "coeficiente", "dimensão máxima"
+   - Considere variações terminológicas e conceitos relacionados
+   - Use os termos relacionados fornecidos acima
+
+2. EXTRAÇÃO DE ARTIGOS:
+   - Encontre TODOS os artigos que respondem DIRETAMENTE à consulta
+   - Um artigo é válido se trata do conceito, mesmo com palavras diferentes
+   - Pode haver MÚLTIPLOS artigos de DIFERENTES partes do documento
+   - Extraia cada trecho como um objeto SEPARADO no array (mesma norma ID pode aparecer múltiplas vezes)
+
+3. QUALIDADE DO EXCERPT:
+   - Deve ser CITAÇÃO LITERAL E EXATA do documento
+   - Tamanho: 300-500 caracteres (máximo 800)
+   - NUNCA adicione palavras, resuma ou interprete o texto
+   - Use as palavras EXATAS do documento original
+   - Não inclua identificadores genéricos no início (ex: "Art. 5º" deve estar no campo "artigo", não no texto)
+
+4. LOCALIZAÇÃO PRECISA:
+   - Preencha os campos estruturados (artigo, capitulo, titulo) SEPARADOS do texto do excerpt
+   - Localize com precisão onde o trecho aparece no documento
+
+5. RELEVÂNCIA:
+   - Apenas inclua trechos que respondem DIRETAMENTE à consulta
+   - Cada resultado deve ter um "relevanceScore" baseado em:
+     * 0.95+: Responde exatamente a pergunta
+     * 0.8-0.94: Responde completamente mas com termos ligeiramente diferentes
+     * 0.6-0.79: Responde parcialmente ou é relacionado
+   - Exclua trechos com score < 0.6
+
+FORMATO DE RETORNO (JSON válido - array):
 [{
   "id": "uuid da norma",
-  "reasoning": "por que este trecho específico responde à consulta",
+  "reasoning": "por que este trecho específico responde à consulta (1-2 linhas)",
   "relevanceScore": 0.95,
-  "excerpt": "CITAÇÃO EXATA E LITERAL do documento (sem resumos, sem adicionar palavras extras no início)",
-  "artigo": "Art. 5º",
-  "capitulo": "Capítulo II",
-  "titulo": "TÍTULO III"
+  "excerpt": "CITAÇÃO EXATA LITERAL do documento - sem resumos, sem adições",
+  "artigo": "Art. 5º" (ou vazio se não aplicável),
+  "capitulo": "Capítulo II" (ou vazio),
+  "titulo": "TÍTULO III" (ou vazio)
 }]
 
-EXEMPLO DE INTERPRETAÇÃO SEMÂNTICA:
-- Consulta: "qual deve ser a area maxima do ocupaçãao dos lotes"
-- Intenção: Descobrir limites de dimensão para lotes
-- Conceitos técnicos: área, ocupação, lote, dimensão, tamanho, máximo, limite, coeficiente de ocupação
-- Buscar por: qualquer menção a área de lotes, dimensões máximas, coeficiente de ocupação, etc.
-- Artigos relevantes podem conter: "área do lote", "ocupação máxima", "coeficiente de ocupação", "dimensões", etc.`,
+EXEMPLOS DE INTERPRETAÇÃO SEMÂNTICA:
+- Consulta: "qual deve ser a area maxima do ocupacao dos lotes"
+  Procurar por: área máxima, dimensão máxima, coeficiente de ocupação, taxa de ocupação, limite de área, ocupação máxima
+
+- Consulta: "como deve ser o acesso para deficientes"
+  Procurar por: acessibilidade, rampa, elevador, acesso universal, inclusão, mobilidade, adaptação
+
+- Consulta: "quais saidas de emergencia sao exigidas"
+  Procurar por: saída de emergência, evacuação, rotas de fuga, segurança, incêndio, prevencao`,
       },
     ];
 
