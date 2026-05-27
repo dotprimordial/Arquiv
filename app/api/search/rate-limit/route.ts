@@ -12,11 +12,11 @@ import { NextResponse, NextRequest } from 'next/server';
 export async function GET(request: NextRequest) {
   try {
     // Get IP from request headers
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
-               request.headers.get('x-real-ip') || 
-               (request as { ip?: string }).ip || 
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] ||
+               request.headers.get('x-real-ip') ||
+               (request as { ip?: string }).ip ||
                'unknown';
-    
+
     const clientIp = ip.trim();
 
     // Obter cliente Supabase autenticado para ler sessão do usuário logado
@@ -32,7 +32,6 @@ export async function GET(request: NextRequest) {
     // Check rate limit
     const rateLimitStatus = await checkRateLimit(clientIp, 'semantic', undefined, userId);
 
-    
     // Get detailed stats
     const stats = await getSearchStats(clientIp);
 
@@ -51,13 +50,23 @@ export async function GET(request: NextRequest) {
         semanticSearches: 0,
       },
     });
-  } catch {
-    console.error('[api/rate-limit] Ocorreu um erro');
-    return NextResponse.json(
-      { 
-        error: 'Erro ao verificar limite de buscas'
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('[api/rate-limit] Error:', errorMsg);
+    // Return 200 with safe defaults instead of 500 to avoid blocking UI
+    return NextResponse.json({
+      clientIp: 'unknown',
+      rateLimit: {
+        allowed: true,
+        remaining: 5,
+        limit: 5,
+        reason: undefined,
       },
-      { status: 500 }
-    );
+      stats: {
+        totalSearches: 0,
+        searchesLastDay: 0,
+        semanticSearches: 0,
+      },
+    });
   }
 }

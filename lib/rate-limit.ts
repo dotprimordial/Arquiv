@@ -3,7 +3,7 @@
  * Tracks and enforces per-user search quotas
  */
 
-import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from './supabase-server';
+import { getAdminSupabaseClient } from './supabase-server';
 
 export interface RateLimitConfig {
   // Limit for anonymous users per day (per IP)
@@ -159,7 +159,8 @@ export async function recordSearch(
  */
 export async function getSearchStats(ipAddress: string) {
   try {
-    const supabase = await getAuthenticatedSupabaseClient();
+    // Use admin client for rate-limit stats query (does not require authentication)
+    const supabase = getAdminSupabaseClient();
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
