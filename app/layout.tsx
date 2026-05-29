@@ -179,6 +179,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { Demo as Footer } from '@/components/footer-demo';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt" suppressHydrationWarning className={cn(equinox.variable, "font-sans", inter.variable)}>
@@ -190,6 +192,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body suppressHydrationWarning className="font-sans antialiased">
         {children}
+        <Footer />
         <Toaster position="top-center" richColors />
         <AdScript />
         <ServiceWorkerRegister />

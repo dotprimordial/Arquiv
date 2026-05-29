@@ -7,7 +7,7 @@ import { analyzeDocumentStructure, chunkDocument, generateSectionEmbeddings } fr
 import { checkRateLimit, recordSearch } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import OpenRouterClient, { OpenRouterMessage } from '@/lib/openrouter';
-import { processSearchQuery, analyzeQueryIntent } from '@/lib/search-utils';
+import { processSearchQuery, analyzeQueryIntent, buildSearchGuidance } from '@/lib/search-utils';
 
 const apiKey = process.env.OPENROUTER_API_KEY || '';
 
@@ -931,10 +931,12 @@ export async function searchNormsSemantic(
 
   // Analyze query intent to improve semantic understanding
   const queryAnalysis = analyzeQueryIntent(query);
+  const queryGuidance = buildSearchGuidance(query);
   console.log('[searchNormsSemantic] Query analysis:', {
     intent: queryAnalysis.intent,
     keywords: queryAnalysis.keywords.slice(0, 5),
     constraints: queryAnalysis.constraints,
+    expandedTerms: queryGuidance.expandedTerms.slice(0, 10),
   });
 
   // Check cache first
@@ -1073,29 +1075,41 @@ export async function searchNormsSemantic(
 - Acessibilidade e segurança
 - Uso do solo e ocupação
 - Classificação de usos (residencial, comercial, industrial, etc.)
+- Coeficientes e índices de ocupação, densidade, aproveitamento
 
 ANÁLISE CONTEXTUAL DA CONSULTA:
-Consulta: "${cleanedQuery}"
+Consulta original: "${cleanedQuery}"
 País: ${country || 'Todos'}
-Intenção: ${queryAnalysis.intent}
+Intenção detectada: ${queryAnalysis.intent}
 Restrições mencionadas: ${queryAnalysis.constraints.join(', ') || 'nenhuma'}
+Palavras-chave principais: ${queryAnalysis.keywords.join(', ')}
+Sinônimos e termos relacionados: ${queryAnalysis.suggestedSynonyms.join(', ')}
+
+TERMOS A BUSCAR SEMANTICAMENTE:
+O usuário está buscando sobre: "${cleanedQuery}"
+Procure especificamente por:
+- Termos exatos: ${queryAnalysis.keywords.join(', ')}
+- Variações técnicas: ${queryAnalysis.suggestedSynonyms.slice(0, 10).join(', ')}
+- Se for sobre ocupação/área: busque por "coeficiente de ocupação", "índice de ocupação", "taxa de ocupação", "densidade", "aproveitamento"
+- Se for sobre altura: busque por "gabarito", "altura máxima", "número de pavimentos"
+- Se for sobre recuos: busque por "afastamento", "recuo de fachada", "margem"
 
 ETAPA 1 - IDENTIFIQUE A INTENÇÃO:
-1. Qual é o CONCEITO PRINCIPAL da pergunta? (ex: dimensões, segurança, ocupação, etc.)
+1. Qual é o CONCEITO PRINCIPAL da pergunta? (ex: dimensões, segurança, ocupação, coeficiente, etc.)
 2. Quais RESTRIÇÕES ou LIMITES são mencionados? (máximo, mínimo, proibição, etc.)
 3. Qual CATEGORIA DE USO é relevante? (residencial, comercial, industrial, etc.)
-4. Qual é o CONTEXTO TÉCNICO? (estrutura, instalações, materiais, etc.)
+4. Qual é o CONTEXTO TÉCNICO? (estrutura, instalações, materiais, ocupação, etc.)
 
 ETAPA 2 - MAPEIE PARA CONCEITOS TÉCNICOS:
-- Sinônimos: ocupação → uso, aproveitamento, destinação
-- Termos relacionados: área → dimensão, metragem, tamanho
-- Variações: altura → elevação, andares, pavimentos
-- Conceitos derivados: segurança → proteção, prevencao, risco
+- Sinônimos: ocupação → uso, aproveitamento, destinação, coeficiente, índice, taxa
+- Termos relacionados: área → dimensão, metragem, tamanho, superfície, lote
+- Variações: altura → elevação, andares, pavimentos, gabarito, limite
+- Conceitos derivados: segurança → proteção, prevenção, risco
 
 ETAPA 3 - CLASSIFIQUE RELEVÂNCIA (ALTA/MÉDIA/BAIXA):
-- ALTA: Trata diretamente do conceito principal
-- MÉDIA: Trata de conceitos relacionados ou dependentes
-- BAIXA: Tangencial ou remoto
+- ALTA: Trata diretamente do conceito principal (usa os termos específicos ou sinônimos claros)
+- MÉDIA: Trata de conceitos relacionados ou dependentes (tangencialmente relacionado)
+- BAIXA: Tangencial ou remoto (pouco relevante)
 
 NORMAS DISPONÍVEIS (${summariesForAI.length}):
 ${JSON.stringify(summariesForAI, null, 2)}
@@ -1106,6 +1120,7 @@ INSTRUÇÕES FINAIS:
 3. Retorne APENAS os IDs das normas relevantes
 4. Se nenhuma for relevante, retorne array vazio []
 5. Ordene por relevância (ALTA primeiro)
+6. Se a consulta é sobre "área de ocupação", "coeficiente" ou termos similares, procure por normas que tratem de zoneamento, uso do solo, ocupação ou planejamento urbano
 
 Retorne neste formato:
 {
@@ -1182,6 +1197,10 @@ Restrições: ${queryAnalysis.constraints.join(', ') || 'nenhuma'}
 TERMOS RELACIONADOS A BUSCAR:
 - Conceitos principais: ${queryAnalysis.keywords.join(', ')}
 - Sinônimos e variações: ${queryAnalysis.suggestedSynonyms.join(', ')}
+- Termos expandidos para busca: ${queryGuidance.expandedTerms.join(', ')}
+
+INTERPRETAÇÃO ESPECÍFICA PARA ESTA CONSULTA:
+${queryGuidance.hintText}
 
 ANÁLISE CONTEXTUAL:
 1. IDENTIFIQUE A INTENÇÃO: O que o usuário realmente quer saber?

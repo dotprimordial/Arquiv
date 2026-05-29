@@ -43,9 +43,9 @@ async function main() {
     console.log('Step 2: Buscar normas...');
     let query = supabase
       .from("norms")
-      .select(selectFields)
-      .eq("country_id", countryData.id)
-      .limit(50);
+      .select("id, code, title, category_id, country_id, content")
+      .ilike("content", "%profundidade%")
+      .limit(10);
 
     const result = await query;
     const data = result.data;
@@ -67,8 +67,14 @@ async function main() {
         if (norm.description) {
           console.log(`     Desc: ${norm.description.substring(0, 60)}`);
         }
-        if (norm.keywords) {
-          console.log(`     Keywords: ${norm.keywords}`);
+        if (norm.content) {
+          const contentStr = String(norm.content);
+          const matchIdx = contentStr.toLowerCase().indexOf('profundidade');
+          if (matchIdx !== -1) {
+            const start = Math.max(0, matchIdx - 100);
+            const end = Math.min(contentStr.length, matchIdx + 200);
+            console.log(`     Trecho: "...${contentStr.substring(start, end).replace(/\n/g, ' ')}..."`);
+          }
         }
       });
     } else {

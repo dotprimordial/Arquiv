@@ -16,7 +16,6 @@ const PORTUGUESE_STOP_WORDS = new Set([
   'muito', 'muita', 'muitos', 'muitas', 'pouco', 'pouca', 'poucos', 'poucas',
   'também', 'ainda', 'já', 'agora', 'hoje', 'antes', 'depois',
   'mais', 'menos', 'melhor', 'pior', 'bom', 'boa', 'bons', 'boas',
-  'grande', 'pequeno', 'alto', 'baixo', 'longo', 'curto',
   'este', 'esta', 'isto', 'esse', 'essa', 'isso', 'aquele', 'aquela', 'aquilo',
   'meu', 'minha', 'meus', 'minhas', 'teu', 'tua', 'teus', 'tuas',
   'nosso', 'nossa', 'nossos', 'nossas', 'seu', 'sua', 'seus', 'suas',
@@ -27,13 +26,13 @@ const PORTUGUESE_STOP_WORDS = new Set([
 // Domain-specific synonym mappings for architectural/urban planning terms
 const SYNONYM_MAPPINGS: Record<string, string[]> = {
   // Solo/território
-  'solo': ['solo', 'terreno', 'territorio', 'terreno', 'chao', 'solo', 'lote', 'parcela'],
-  'ocupação': ['ocupacao', 'uso', 'utilizacao', 'emprego', 'aproveitamento', 'ocupacao'],
-  'uso': ['uso', 'utilizacao', 'emprego', 'aproveitamento', 'ocupacao', 'destinacao'],
-  'zoneamento': ['zoneamento', 'zonas', 'zonificacao', 'classificacao', 'categorias', 'zonas'],
-  'urbanismo': ['urbanismo', 'urbanizacao', 'cidade', 'urbano', 'municipal', 'planejamento'],
-  'território': ['territorio', 'area', 'espaco', 'regiao', 'local', 'lote'],
-  'lote': ['lote', 'parcela', 'terreno', 'solo', 'gleba'],
+  'solo': ['solo', 'terreno', 'territorio', 'terreno', 'chao', 'solo', 'lote', 'parcela', 'gleba'],
+  'ocupação': ['ocupacao', 'uso', 'utilizacao', 'emprego', 'aproveitamento', 'ocupacao', 'coeficiente', 'indice', 'taxa', 'densidade'],
+  'uso': ['uso', 'utilizacao', 'emprego', 'aproveitamento', 'ocupacao', 'destinacao', 'coeficiente', 'densidade'],
+  'zoneamento': ['zoneamento', 'zonas', 'zonificacao', 'classificacao', 'categorias', 'zonas', 'uso', 'ocupacao'],
+  'urbanismo': ['urbanismo', 'urbanizacao', 'cidade', 'urbano', 'municipal', 'planejamento', 'ocupacao', 'zoneamento'],
+  'território': ['territorio', 'area', 'espaco', 'regiao', 'local', 'lote', 'solo', 'ocupacao'],
+  'lote': ['lote', 'parcela', 'terreno', 'solo', 'gleba', 'ocupacao'],
 
   // Construção/edificação
   'construção': ['construcao', 'edificacao', 'obra', 'edificio', 'estrutura', 'empreendimento'],
@@ -56,9 +55,9 @@ const SYNONYM_MAPPINGS: Record<string, string[]> = {
   'largura': ['largura', 'extensao', 'dimensao', 'tamanho', 'amplitude'],
   'profundidade': ['profundidade', 'dimensao', 'espessura', 'tamanho'],
   'área': ['area', 'espaco', 'superficie', 'metragem', 'tamanho', 'extensao'],
-  'coeficiente': ['coeficiente', 'indice', 'taxa', 'proporcao', 'relacao'],
+  'coeficiente': ['coeficiente', 'indice', 'taxa', 'proporcao', 'relacao', 'ocupacao', 'densidade'],
   'recuo': ['recuo', 'afastamento', 'distancia', 'margem', 'espaco'],
-  'gabarito': ['gabarito', 'altura', 'limite', 'restricao', 'padrao'],
+  'gabarito': ['gabarito', 'altura', 'limite', 'restricao', 'padrao', 'maximo'],
 
   // Estacionamento
   'estacionamento': ['estacionamento', 'parqueamento', 'vagas', 'garagem', 'parking', 'parada'],
@@ -160,6 +159,24 @@ export function expandTerms(terms: string[]): string[] {
       });
     }
   });
+  
+  // Add special compound term handling
+  // If both "area" and "ocupacao" are present, add "coeficiente"
+  const hasArea = terms.some(t => removeAccents(t).includes('area'));
+  const hasOcupacao = terms.some(t => removeAccents(t).includes('ocupacao'));
+  if (hasArea && hasOcupacao) {
+    expanded.add('coeficiente');
+    expanded.add('indice');
+    expanded.add('taxa');
+    expanded.add('densidade');
+  }
+  
+  // If "maximo" with area/ocupacao, add height-related terms
+  const hasMaximo = terms.some(t => removeAccents(t).includes('maximo'));
+  if ((hasArea || hasOcupacao) && hasMaximo) {
+    expanded.add('aproveitamento');
+    expanded.add('limite');
+  }
   
   return Array.from(expanded);
 }
@@ -279,4 +296,57 @@ export function processSearchQuery(query: string): string[] {
   const keywords = extractKeywords(query);
   const expanded = expandTerms(keywords);
   return expanded;
+}
+
+export interface SearchGuidance {
+  intent: 'requirement' | 'limit' | 'method' | 'definition' | 'comparison' | 'procedure' | 'classification';
+  keywords: string[];
+  expandedTerms: string[];
+  suggestedSynonyms: string[];
+  constraints: string[];
+  hintText: string;
+}
+
+export function buildSearchGuidance(query: string): SearchGuidance {
+  const queryAnalysis = analyzeQueryIntent(query);
+  const keywords = extractKeywords(query);
+  const expandedTerms = expandTerms(keywords);
+  const hintParts: string[] = [];
+
+  if (queryAnalysis.intent === 'limit') {
+    hintParts.push('A consulta busca um limite ou regra numérica; procure termos como máximo, mínimo, limite, coeficiente, índice, taxa.');
+  }
+
+  if (keywords.some((term) => ['area', 'superficie', 'terreno', 'lote'].includes(term))) {
+    hintParts.push('Se a consulta envolve área ou terreno, procure também por uso do solo, ocupação, aproveitamento, coeficiente de ocupação e índice de ocupação.');
+  }
+
+  if (keywords.some((term) => ['ocupacao', 'uso', 'aproveitamento', 'densidade', 'coeficiente', 'taxa'].includes(term))) {
+    hintParts.push('Termos de ocupação podem aparecer como coeficiente de ocupação, taxa de ocupação, densidade, aproveitamento e limite de uso do solo.');
+  }
+
+  if (keywords.some((term) => ['altura', 'gabarito', 'pavimento', 'andar', 'elevacao'].includes(term))) {
+    hintParts.push('Termos de altura podem ser expressos como gabarito, elevação máxima, número de pavimentos ou limite de elevação.');
+  }
+
+  if (keywords.some((term) => ['acesso', 'acessibilidade', 'rampa', 'elevador', 'entrada', 'circulacao'].includes(term))) {
+    hintParts.push('Termos de acesso podem aparecer como rota de circulação acessível, entrada universal, rampa ou elevador.');
+  }
+
+  if (keywords.some((term) => ['seguranca', 'incendio', 'evacuacao', 'rota', 'perigo'].includes(term))) {
+    hintParts.push('Termos de segurança podem aparecer como rotas de fuga, prevenção de incêndio, proteção e evacuação.');
+  }
+
+  if (hintParts.length === 0) {
+    hintParts.push('Procure não apenas as palavras exatas da consulta, mas também sinônimos técnicos e variações conceituais.');
+  }
+
+  return {
+    intent: queryAnalysis.intent,
+    keywords,
+    expandedTerms,
+    suggestedSynonyms: queryAnalysis.suggestedSynonyms,
+    constraints: queryAnalysis.constraints,
+    hintText: hintParts.join(' '),
+  };
 }

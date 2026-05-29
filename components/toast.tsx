@@ -29,7 +29,7 @@ type Toast = {
   id: number;
   text: string | ReactNode;
   measuredHeight?: number;
-  timeout?: NodeJS.Timeout;
+  timeout?: ReturnType<typeof setTimeout>;
   remaining?: number;
   start?: number;
   pause?: () => void;

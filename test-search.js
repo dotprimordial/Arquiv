@@ -2,8 +2,8 @@
 const { searchNormsSemantic } = require('./app/actions/norm-actions.ts');
 
 async function testSearch() {
-  const query = "qual deve ser a area maxima do ocupaçãao dos lotes";
-  const country = "Moçambique"; // ou outro país disponível
+  const query = "qual é a profundidade maxima dos edificios";
+  const country = "Portugal"; // Vou testar Portugal como exemplo, depois posso mudar se necessário
   
   console.log('=== TESTE DE BUSCA SEMÂNTICA ===');
   console.log('Query:', query);

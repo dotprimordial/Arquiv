@@ -173,7 +173,7 @@ export default function Home() {
             setNorms(null);
           } catch (semanticErr) {
             console.error('Busca semântica falhou, usando busca tradicional:', semanticErr);
-            
+
             // Check if it was a rate limit error
             const errMsg = semanticErr instanceof Error ? semanticErr.message : String(semanticErr);
             if (errMsg.includes('Limite')) {
@@ -321,7 +321,7 @@ export default function Home() {
     <main className="min-h-screen bg-[#F9F9F8] text-zinc-900 selection:bg-zinc-900 selection:text-white">
       {/* Header */}
       <header className="border-b border-zinc-200 bg-white sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center">
             <div className="cursor-pointer" onClick={() => router.push('/')}>
               <h1 className="font-[family-name:var(--font-equinox)] font-black text-xl leading-none uppercase tracking-wider hover:text-zinc-600 transition-colors">ARQUIV</h1>
@@ -438,15 +438,13 @@ export default function Home() {
               }
               setIsAiSearchEnabled(!isAiSearchEnabled);
             }}
-            className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
-              isAiSearchEnabled ? 'bg-emerald-500' : 'bg-zinc-300'
-            }`}
+            className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${isAiSearchEnabled ? 'bg-emerald-500' : 'bg-zinc-300'
+              }`}
             aria-label={isAiSearchEnabled ? 'Desativar busca IA' : 'Ativar busca IA'}
           >
             <span
-              className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${
-                isAiSearchEnabled ? 'translate-x-6' : 'translate-x-0'
-              }`}
+              className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${isAiSearchEnabled ? 'translate-x-6' : 'translate-x-0'
+                }`}
             />
           </button>
           <span className={`text-sm font-medium ${isAiSearchEnabled ? 'text-emerald-600' : 'text-zinc-400'}`}>
@@ -462,11 +460,10 @@ export default function Home() {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all border ${
-                selectedCategory === cat
-                  ? 'bg-[#1e293b] text-white border-[#1e293b]'
-                  : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-300'
-              }`}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all border ${selectedCategory === cat
+                ? 'bg-[#1e293b] text-white border-[#1e293b]'
+                : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-300'
+                }`}
             >
               {cat}
             </button>
@@ -477,16 +474,16 @@ export default function Home() {
       {/* Results */}
       {searchQuery.trim() !== '' && isAiSearchEnabled ? (
         <ErrorBoundary>
-        <SemanticNormDisplay
-          results={semanticResults}
-          isLoading={isLoading}
-          error={error}
-          countryName={selectedCountry?.name || ''}
-          countryCode={selectedCountry?.code || ''}
-          hasSearchQuery={searchQuery.trim() !== ''}
-          isAdmin={isAdmin}
-        />
-      </ErrorBoundary>
+          <SemanticNormDisplay
+            results={semanticResults}
+            isLoading={isLoading}
+            error={error}
+            countryName={selectedCountry?.name || ''}
+            countryCode={selectedCountry?.code || ''}
+            hasSearchQuery={searchQuery.trim() !== ''}
+            isAdmin={isAdmin}
+          />
+        </ErrorBoundary>
       ) : (
         <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin"></div></div>}>
           <NormDisplay
@@ -513,7 +510,7 @@ export default function Home() {
               disabled={currentPage === 1}
               className="mr-4 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <svg className="mt-1.5" width="9" height="13" viewBox="0 0 9 13" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 1 2 6.667 8 12" stroke="#111820" strokeOpacity=".5" strokeWidth="2" strokeLinecap="round"/></svg>
+              <svg className="mt-1.5" width="9" height="13" viewBox="0 0 9 13" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 1 2 6.667 8 12" stroke="#111820" strokeOpacity=".5" strokeWidth="2" strokeLinecap="round" /></svg>
               <span>prev</span>
             </button>
 
@@ -535,11 +532,10 @@ export default function Home() {
                     key={pageNum}
                     type="button"
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`flex items-center justify-center w-9 md:w-12 h-9 md:h-12 aspect-square rounded-md transition-all ${
-                      currentPage === pageNum
-                        ? 'border border-indigo-500 text-indigo-500'
-                        : 'hover:bg-slate-100/80'
-                    }`}
+                    className={`flex items-center justify-center w-9 md:w-12 h-9 md:h-12 aspect-square rounded-md transition-all ${currentPage === pageNum
+                      ? 'border border-indigo-500 text-indigo-500'
+                      : 'hover:bg-slate-100/80'
+                      }`}
                   >
                     {pageNum}
                   </button>
@@ -554,7 +550,7 @@ export default function Home() {
               className="ml-4 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span>next</span>
-              <svg className="mt-1.5" width="9" height="13" viewBox="0 0 9 13" fill="none" xmlns="http://www.w3.org/2000/svg" transform="scale(-1 1)"><path d="M8 1 2 6.667 8 12" stroke="#111820" strokeOpacity=".5" strokeWidth="2" strokeLinecap="round"/></svg>
+              <svg className="mt-1.5" width="9" height="13" viewBox="0 0 9 13" fill="none" xmlns="http://www.w3.org/2000/svg" transform="scale(-1 1)"><path d="M8 1 2 6.667 8 12" stroke="#111820" strokeOpacity=".5" strokeWidth="2" strokeLinecap="round" /></svg>
             </button>
           </div>
         </div>

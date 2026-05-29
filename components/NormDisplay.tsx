@@ -100,7 +100,7 @@ function NormDisplay({
       <p className="text-sm text-zinc-500 mb-6">
         {countryCode} Mostrando <span className="font-bold text-zinc-900">{norms.length}</span> normas para <span className="font-bold text-zinc-900">{countryName}</span>
       </p>
-      
+
       {norms.map((norm) => (
         <motion.div
           key={norm.id}
@@ -117,122 +117,122 @@ function NormDisplay({
             <div className="bg-white border border-zinc-100 rounded-2xl p-6 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-3 flex-1">
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-bold text-orange-700 tracking-wide uppercase">
-                  {norm.code}
-                </span>
-                <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-semibold rounded-full">
-                  {norm.category}
-                </span>
-              </div>
-              <h3 className="text-xl font-bold text-zinc-900 leading-tight">
-                {norm.title}
-              </h3>
-              <p className="text-zinc-500 text-sm leading-relaxed">
-                {norm.summary || norm.description}
-              </p>
-              
-              {/* Mostrar reasoning apenas quando houver pesquisa */}
-              {hasSearchQuery && norm.reasoning && (
-                <div className="mt-4 p-3 bg-zinc-50 border border-zinc-100 rounded-xl flex gap-3 items-start">
-                  <div className="w-5 h-5 bg-zinc-900 rounded flex items-center justify-center shrink-0 mt-0.5">
-                    <Compass className="w-3 h-3 text-white" />
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-orange-700 tracking-wide uppercase">
+                      {norm.code}
+                    </span>
+                    <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-semibold rounded-full">
+                      {norm.category}
+                    </span>
                   </div>
-                  <p className="text-xs text-zinc-600 italic leading-relaxed">
-                    <span className="font-bold text-zinc-900 not-italic">Porquê este resultado:</span> {norm.reasoning}
+                  <h3 className="text-xl font-bold text-zinc-900 leading-tight">
+                    {norm.title}
+                  </h3>
+                  <p className="text-zinc-500 text-sm leading-relaxed">
+                    {norm.summary || norm.description}
                   </p>
-                </div>
-              )}
 
-              {/* Mostrar artigos apenas quando houver pesquisa */}
-              {hasSearchQuery && norm.excerpt && (
-                <div className="mt-3 p-4 bg-blue-50 border border-blue-100 rounded-xl">
-                  <div className="flex items-start gap-3">
-                    <div className="w-5 h-5 bg-blue-600 rounded flex items-center justify-center shrink-0 mt-0.5">
-                      <BookOpen className="w-3 h-3 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs font-bold text-blue-900 mb-1">Artigo Relevante:</p>
-                      <p className="text-sm text-blue-800 leading-relaxed italic">
-                        &quot;{expandedNorms.has(norm.id) ? norm.excerpt : norm.excerpt.substring(0, 200) + (norm.excerpt.length > 200 ? '...' : '')}&quot;
+                  {/* Mostrar reasoning apenas quando houver pesquisa */}
+                  {hasSearchQuery && norm.reasoning && (
+                    <div className="mt-4 p-3 bg-zinc-50 border border-zinc-100 rounded-xl flex gap-3 items-start">
+                      <div className="w-5 h-5 bg-zinc-900 rounded flex items-center justify-center shrink-0 mt-0.5">
+                        <Compass className="w-3 h-3 text-white" />
+                      </div>
+                      <p className="text-xs text-zinc-600 italic leading-relaxed">
+                        <span className="font-bold text-zinc-900 not-italic">Porquê este resultado:</span> {norm.reasoning}
                       </p>
-                      {norm.excerpt.length > 200 && (
-                        <button
-                          onClick={() => toggleExpanded(norm.id)}
-                          className="mt-2 text-xs text-blue-600 font-medium hover:text-blue-800 transition-colors flex items-center gap-1"
-                        >
-                          {expandedNorms.has(norm.id) ? (
-                            <>
-                              <ChevronUp className="w-3 h-3" />
-                              Ver menos
-                            </>
-                          ) : (
-                            <>
-                              <ChevronDown className="w-3 h-3" />
-                              Ver mais artigos
-                            </>
+                    </div>
+                  )}
+
+                  {/* Mostrar artigos apenas quando houver pesquisa */}
+                  {hasSearchQuery && norm.excerpt && (
+                    <div className="mt-3 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                      <div className="flex items-start gap-3">
+                        <div className="w-5 h-5 bg-blue-600 rounded flex items-center justify-center shrink-0 mt-0.5">
+                          <BookOpen className="w-3 h-3 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-blue-900 mb-1">Artigo Relevante:</p>
+                          <p className="text-sm text-blue-800 leading-relaxed italic">
+                            &quot;{expandedNorms.has(norm.id) ? norm.excerpt : norm.excerpt.substring(0, 200) + (norm.excerpt.length > 200 ? '...' : '')}&quot;
+                          </p>
+                          {norm.excerpt.length > 200 && (
+                            <button
+                              onClick={() => toggleExpanded(norm.id)}
+                              className="mt-2 text-xs text-blue-600 font-medium hover:text-blue-800 transition-colors flex items-center gap-1"
+                            >
+                              {expandedNorms.has(norm.id) ? (
+                                <>
+                                  <ChevronUp className="w-3 h-3" />
+                                  Ver menos
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="w-3 h-3" />
+                                  Ver mais artigos
+                                </>
+                              )}
+                            </button>
                           )}
+                          <p className="text-xs text-blue-600 mt-2 font-medium">
+                            💡 Busca exaustiva: TODOS os artigos relevantes foram transcritos para consulta completa
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <Link
+                        href={`/norm_detail/${encodeURIComponent(norm.id)}`}
+                        className="inline-flex items-center gap-2 text-sm font-bold text-zinc-900 hover:gap-3 transition-all"
+                      >
+                        Ler mais <ArrowRight className="w-4 h-4" />
+                      </Link>
+
+                      {isAdmin && (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleGenerateSummary(norm.id);
+                          }}
+                          disabled={generatingSummaryId === norm.id}
+                          className="inline-flex items-center gap-2 text-sm font-bold text-amber-600 hover:text-amber-700 transition-all disabled:opacity-50"
+                          title="Gerar Resumo Manualmente"
+                        >
+                          {generatingSummaryId === norm.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Wand2 className="w-4 h-4" />
+                          )}
+                          Resumir
                         </button>
                       )}
-                      <p className="text-xs text-blue-600 mt-2 font-medium">
-                        💡 Busca exaustiva: TODOS os artigos relevantes foram transcritos para consulta completa
-                      </p>
                     </div>
-                  </div>
-                </div>
-              )}
-              
-              <div className="pt-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <Link 
-                    href={`/norm_detail/${encodeURIComponent(norm.id)}`}
-                    className="inline-flex items-center gap-2 text-sm font-bold text-zinc-900 hover:gap-3 transition-all"
-                  >
-                    Ler mais <ArrowRight className="w-4 h-4" />
-                  </Link>
 
-                  {isAdmin && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleGenerateSummary(norm.id);
-                      }}
-                      disabled={generatingSummaryId === norm.id}
-                      className="inline-flex items-center gap-2 text-sm font-bold text-amber-600 hover:text-amber-700 transition-all disabled:opacity-50"
-                      title="Gerar Resumo Manualmente"
-                    >
-                      {generatingSummaryId === norm.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Wand2 className="w-4 h-4" />
-                      )}
-                      Resumir
-                    </button>
-                  )}
-                </div>
-
-                {isAdmin && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        const newTitle = prompt('Novo título:', norm.title);
-                        if (newTitle && onUpdate) onUpdate(norm.id, { title: newTitle });
-                      }}
-                      className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-all"
-                      title="Editar"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => onDelete && onDelete(norm.id)}
-                      className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                      title="Excluir"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {isAdmin && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            const newTitle = prompt('Novo título:', norm.title);
+                            if (newTitle && onUpdate) onUpdate(norm.id, { title: newTitle });
+                          }}
+                          className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-all"
+                          title="Editar"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => onDelete && onDelete(norm.id)}
+                          className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          title="Excluir"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
                 </div>
                 <div className="hidden sm:block">
                   <ChevronDown className="w-5 h-5 text-zinc-300 group-hover:text-zinc-900 transition-colors mt-1" />
