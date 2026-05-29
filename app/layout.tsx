@@ -8,7 +8,7 @@ import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import { cn } from "@/lib/utils";
 
 // O Cloudflare Pages exige o runtime 'edge' para todas as rotas dinâmicas
-export const runtime = 'edge';
+
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://arquiv.org';
 

@@ -1,4 +1,4 @@
-import { Hexagon, Github, Twitter } from "lucide-react"
+import { Hexagon } from "lucide-react"
 import { Footer } from "@/components/ui/footer"
 
 function Demo() {
@@ -6,32 +6,20 @@ function Demo() {
     <div className="w-full">
       <Footer
         logo={<Hexagon className="h-10 w-10" />}
-        brandName="Awesome Corp"
-        socialLinks={[
-          {
-            icon: <Twitter className="h-5 w-5" />,
-            href: "https://twitter.com",
-            label: "Twitter",
-          },
-          {
-            icon: <Github className="h-5 w-5" />,
-            href: "https://github.com",
-            label: "GitHub",
-          },
-        ]}
+        brandName="SaaSarc"
+        socialLinks={[]}
         mainLinks={[
-          { href: "/products", label: "Products" },
-          { href: "/about", label: "About" },
-          { href: "/blog", label: "Blog" },
-          { href: "/contact", label: "Contact" },
+          { href: "/top-up", label: "Recargas" },
+          { href: "/about", label: "Sobre" },
+          { href: "/contact", label: "Contacto" },
         ]}
         legalLinks={[
-          { href: "/privacy", label: "Privacy" },
-          { href: "/terms", label: "Terms" },
+          { href: "/privacypolicy", label: "politicas de privacidade" },
+          { href: "/termosofuse", label: "Termos de Uso" },
         ]}
         copyright={{
-          text: "© 2024 Awesome Corp",
-          license: "All rights reserved",
+          text: "© 2026 SaaSarc",
+          license: "Todos os direitos reservados",
         }}
       />
     </div>
