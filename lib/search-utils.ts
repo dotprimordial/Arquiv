@@ -3,6 +3,8 @@
  * Extracts keywords, expands terms, and normalizes text for better search matching
  */
 
+import { OpenRouterClient, OpenRouterMessage } from './openrouter';
+
 // Portuguese stop words to remove from queries
 const PORTUGUESE_STOP_WORDS = new Set([
   'a', 'o', 'as', 'os', 'um', 'uma', 'uns', 'umas',
@@ -111,7 +113,9 @@ const SYNONYM_MAPPINGS: Record<string, string[]> = {
   // Limites/restrições
   'limite': ['limite', 'maximo', 'restricao', 'proibicao', 'impedimento'],
   'máximo': ['maximo', 'limite', 'restricao', 'superior', 'topo'],
+  'maximo': ['maximo', 'limite', 'restricao', 'superior', 'topo'],
   'mínimo': ['minimo', 'limite', 'inferior', 'base', 'requisito'],
+  'minimo': ['minimo', 'limite', 'inferior', 'base', 'requisito'],
   'exigência': ['exigencia', 'requisito', 'obrigacao', 'necessidade', 'demanda'],
   'proibição': ['proibicao', 'veto', 'impedimento', 'restricao', 'limite'],
 };
@@ -349,4 +353,70 @@ export function buildSearchGuidance(query: string): SearchGuidance {
     constraints: queryAnalysis.constraints,
     hintText: hintParts.join(' '),
   };
+}
+
+export interface InterpretUserQueryResult {
+  intent: 'requirement' | 'limit' | 'method' | 'definition' | 'comparison' | 'procedure' | 'classification' | 'general';
+  keywords: string[];
+  concepts: string[];
+  constraints: string[];
+  suggestedSynonyms: string[];
+  expandedTerms: string[];
+  hintText: string;
+  aiAnalysis: string;
+}
+
+export async function interpretUserQuery(query: string, apiKey: string): Promise<InterpretUserQueryResult> {
+  if (!apiKey || apiKey.length < 10) {
+    console.warn('[interpretUserQuery] API Key não configurada, retornando análise básica');
+    const basicAnalysis = analyzeQueryIntent(query);
+    const basicGuidance = buildSearchGuidance(query);
+    return {
+      ...basicAnalysis,
+      expandedTerms: basicGuidance.expandedTerms,
+      hintText: basicGuidance.hintText,
+      aiAnalysis: "Análise básica devido à falta de API Key."
+    };
+  }
+
+  const openRouter = new OpenRouterClient(apiKey);
+
+  const prompt = `Você é um assistente de IA especializado em interpretar consultas de usuários sobre normas arquitetônicas e de construção. Sua tarefa é analisar a consulta do usuário e extrair informações semânticas detalhadas para otimizar uma busca em um banco de dados de normas.\n\nConsulta do Usuário: "${query}"\n\nSua análise deve ser estruturada no formato JSON e incluir os seguintes campos:\n\n1.  **intent**: A intenção principal da consulta. Escolha uma das seguintes categorias: 'requirement' (requisito/obrigação), 'limit' (limite/restrição numérica), 'method' (como fazer/procedimento), 'definition' (definição/significado), 'comparison' (comparação), 'procedure' (sequência de passos), 'classification' (tipos/categorias) ou 'general' (se a intenção não for clara ou for muito ampla).\n2.  **keywords**: Uma lista de palavras-chave principais extraídas da consulta, relevantes para a busca.\n3.  **concepts**: Uma lista de conceitos técnicos e termos relacionados que a IA deve procurar, expandindo as palavras-chave.\n4.  **constraints**: Quaisquer restrições ou condições mencionadas na consulta (ex: "máximo", "mínimo", "proibido", "obrigatório").\n5.  **suggestedSynonyms**: Sinônimos e termos alternativos que podem ser usados para refinar a busca.\n6.  **expandedTerms**: Termos expandidos que incluem sinônimos e termos relacionados para uma busca mais abrangente.\n7.  **hintText**: Um texto curto (1-2 frases) com dicas para a IA de busca sobre o que procurar especificamente com base na análise da consulta.\n8.  **aiAnalysis**: Uma breve análise em linguagem natural (1-3 frases) sobre o que a IA entendeu da consulta e como ela planeja abordá-la.\n\nExemplo de saída JSON:\n{\n  "intent": "limit",\n  "keywords": ["altura", "edificio"],\n  "concepts": ["altura máxima", "gabarito", "limite de elevação"],\n  "constraints": ["máximo"],\n  "suggestedSynonyms": ["gabarito", "elevação"],\n  "expandedTerms": ["altura", "edificio", "gabarito", "elevação máxima", "limite de elevação"],\n  "hintText": "A consulta busca um limite de altura para edifícios; procure por termos como gabarito, altura máxima, número de pavimentos.",\n  "aiAnalysis": "A IA interpretou a consulta como uma busca por limites de altura para edificações, focando em termos técnicos e sinônimos para garantir a abrangência da busca."
+}\n\nCertifique-se de que a saída seja um JSON válido e completo.`;
+
+  const messages: OpenRouterMessage[] = [{ role: "user", content: prompt }];
+
+  try {
+    const response = await openRouter.chatCompletion(
+      messages,
+      'anthropic/claude-3.5-haiku',
+      0.3,
+      { type: 'json_object' }
+    );
+
+    const responseText = response.choices[0]?.message?.content || '{}';
+    const parsedResponse = JSON.parse(responseText);
+
+    return {
+      intent: parsedResponse.intent || 'general',
+      keywords: parsedResponse.keywords || [],
+      concepts: parsedResponse.concepts || [],
+      constraints: parsedResponse.constraints || [],
+      suggestedSynonyms: parsedResponse.suggestedSynonyms || [],
+      expandedTerms: parsedResponse.expandedTerms || [],
+      hintText: parsedResponse.hintText || 'Procure não apenas as palavras exatas da consulta, mas também sinônimos técnicos e variações conceituais.',
+      aiAnalysis: parsedResponse.aiAnalysis || 'A IA realizou uma análise da consulta do usuário.',
+    };
+
+  } catch (error) {
+    console.error('[interpretUserQuery] Erro ao chamar a API da IA para interpretação da consulta:', error);
+    const basicAnalysis = analyzeQueryIntent(query);
+    const basicGuidance = buildSearchGuidance(query);
+    return {
+      ...basicAnalysis,
+      expandedTerms: basicGuidance.expandedTerms,
+      hintText: basicGuidance.hintText,
+      aiAnalysis: `Falha na interpretação da IA: ${error instanceof Error ? error.message : String(error)}. Usando análise básica.`,
+    };
+  }
 }
