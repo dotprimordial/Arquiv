@@ -45,6 +45,7 @@ export interface Norm {
   file_url?: string;
   category?: string;
   country?: string;
+  summaries?: Array<{ summary?: string }>;
   [key: string]: unknown;
 }
 
@@ -97,7 +98,7 @@ export const getArchitecturalNorms = async (
     const isSearchMode = queryText && queryText.trim() !== "";
 
     // FIX #21: Use NORMALIZED schema
-    const selectFields = "id, code, title, category_id, country_id, keywords, total_sections, summaries!left(summary)";
+    const selectFields = "id, code, title, description, category_id, country_id, keywords, total_sections, summaries!left(summary)";
 
     console.log(`[getArchitecturalNorms] Modo: ${isSearchMode ? "PESQUISA" : "LISTA SIMPLES"}`);
     console.log(`[getArchitecturalNorms] DEBUG - Country: "${country}" | Category: "${category}" | Query: "${queryText || 'none'}"`);
@@ -168,11 +169,19 @@ export const getArchitecturalNorms = async (
       return { norms: [], totalCount: 0 };
     }
 
+    // Flatten joined summaries into the summary field for scoring and display
+    data = data.map((n) => {
+      if (!n.summary && Array.isArray(n.summaries) && n.summaries.length > 0) {
+        n.summary = String(n.summaries[0]?.summary || '');
+      }
+      return n;
+    });
+
     // Sem pesquisa: retornar lista leve imediatamente
     if (!isSearchMode) {
       results = data.map((n) => ({
         ...n,
-        reasoning: n.description || `Norma ${n.code} - ${n.title}`,
+        reasoning: n.description || n.summary || `Norma ${n.code} - ${n.title}`,
       }));
       // Cache and return
       setClientCache(cacheKey, { norms: results, totalCount: results.length }, 5);
@@ -260,11 +269,12 @@ INSTRUÇÕES:
 
     const scoredResults = data
       .map((n: Norm) => {
+        const searchableText = n.description || n.summary || "";
         const score = calculateSearchScore(
           searchTokens,
           n.title,
           n.code,
-          n.description || "",
+          searchableText,
           n.keywords || []
         );
 
@@ -288,14 +298,9 @@ INSTRUÇÕES:
     console.log(`[getArchitecturalNorms] Busca textual: ${scoredResults.length} resultados`);
 
     if (scoredResults.length === 0) {
-      // Se não encontrou com tokens, retornar todas as normas do país
-      console.log(`[getArchitecturalNorms] DEBUG - No matches, returning all ${data.length} norms`);
-      results = data.slice(0, 10).map((n) => ({
-        ...n,
-        title: removeHiddenText(n.title),
-        description: removeHiddenText(n.description || ''),
-        reasoning: removeHiddenText(n.description || `Norma ${n.code} — ${n.title}`)
-      }));
+      // If no matches are found for a non-empty query, return no results instead of a generic list.
+      console.log(`[getArchitecturalNorms] DEBUG - No matches for query "${queryText}", returning empty results`);
+      results = [];
     } else {
       results = scoredResults;
     }

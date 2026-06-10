@@ -20,6 +20,7 @@ RETURNS TABLE (
     section_number TEXT,
     section_title TEXT,
     content TEXT,
+    ai_interpretation TEXT,
     similarity FLOAT
 ) AS $$
 BEGIN
@@ -34,6 +35,7 @@ BEGIN
         ns.section_number,
         ns.section_title,
         ns.content,
+        ns.ai_interpretation,
         (1 - (ns.embedding <=> query_embedding))::FLOAT as similarity
     FROM norm_sections ns
     JOIN norms n ON n.id = ns.norm_id

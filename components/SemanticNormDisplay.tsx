@@ -75,7 +75,7 @@ function SemanticNormDisplay({
   };
 
   // Helper function to truncate text to maxWords
-  const truncateText = (text: string, maxWords: number = 10): { truncated: string; isTruncated: boolean } => {
+  const truncateText = (text: string, maxWords: number = 30): { truncated: string; isTruncated: boolean } => {
     const words = text.trim().split(/\s+/);
     if (words.length <= maxWords) {
       return { truncated: text, isTruncated: false };
@@ -276,20 +276,34 @@ function SemanticNormDisplay({
                         )}
                       </div>
 
+                      {/* AI Extracted Answer Card */}
+                      {group.sections[0].extractedAnswer && (
+                        <div className="mb-4 bg-emerald-50/70 border border-emerald-100 rounded-xl p-5 shadow-sm">
+                          <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 uppercase tracking-wider mb-2">
+                            <Wand2 className="w-4 h-4 text-emerald-600 animate-pulse" />
+                            <span>Resposta Direta da IA</span>
+                          </div>
+                          <p className="text-base font-semibold text-zinc-950 leading-relaxed">
+                            {group.sections[0].extractedAnswer}
+                          </p>
+                        </div>
+                      )}
+
                       {/* Artigo Principal */}
                       <div className="bg-white border-l-4 border-blue-500 p-4 rounded-r-lg shadow-sm">
                         <p className="text-xs font-semibold text-blue-700 mb-2">
-                          Artigo relevante:
+                          {group.sections[0].extractedAnswer ? "Artigo Completo:" : "Artigo relevante:"}
                         </p>
                         {(() => {
                           const sectionId = group.sections[0].sectionId;
                           const isExpanded = expandedContents.has(sectionId);
-                          const { truncated, isTruncated } = truncateText(group.sections[0].content, 10);
+                          const contentToDisplay = group.sections[0].fullArticleContent || group.sections[0].content;
+                          const { truncated, isTruncated } = truncateText(contentToDisplay, group.sections[0].extractedAnswer ? 40 : 30);
 
                           return (
                             <>
                               <p className="text-sm text-zinc-800 leading-relaxed whitespace-pre-wrap">
-                                {isExpanded ? group.sections[0].content : truncated}
+                                {isExpanded ? contentToDisplay : truncated}
                               </p>
                               {isTruncated && (
                                 <button
@@ -363,16 +377,33 @@ function SemanticNormDisplay({
                                   )}
                                 </div>
 
+                                {/* AI Extracted Answer Card */}
+                                {section.extractedAnswer && (
+                                  <div className="mb-3 bg-emerald-50/70 border border-emerald-100 rounded-xl p-4 shadow-sm">
+                                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">
+                                      <Wand2 className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+                                      <span>Resposta Direta da IA</span>
+                                    </div>
+                                    <p className="text-sm font-semibold text-zinc-950 leading-relaxed">
+                                      {section.extractedAnswer}
+                                    </p>
+                                  </div>
+                                )}
+
                                 {/* Artigo */}
                                 <div className="bg-white border-l-3 border-zinc-300 p-3 rounded-r-lg">
+                                  <p className="text-xs font-semibold text-zinc-500 mb-1.5">
+                                    {section.extractedAnswer ? "Artigo Completo:" : ""}
+                                  </p>
                                   {(() => {
                                     const isExpanded = expandedContents.has(section.sectionId);
-                                    const { truncated, isTruncated } = truncateText(section.content, 10);
+                                    const contentToDisplay = section.fullArticleContent || section.content;
+                                    const { truncated, isTruncated } = truncateText(contentToDisplay, section.extractedAnswer ? 40 : 30);
 
                                     return (
                                       <>
                                         <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">
-                                          {isExpanded ? section.content : truncated}
+                                          {isExpanded ? contentToDisplay : truncated}
                                         </p>
                                         {isTruncated && (
                                           <button

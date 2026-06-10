@@ -1,3 +1,4 @@
+require('dotenv').config({ path: '.env.local' });
 // Test script for semantic search
 const { searchNormsSemantic } = require('./app/actions/norm-actions.ts');
 
@@ -23,7 +24,15 @@ async function testSearch() {
       console.log(`Similaridade: ${result.similarity.toFixed(4)}`);
       console.log(`Seção: ${result.sectionType} ${result.sectionNumber || ''}`);
       console.log(`Título da Seção: ${result.sectionTitle || 'N/A'}`);
-      console.log(`Conteúdo: ${result.content.substring(0, 200)}...`);
+      console.log(`Conteúdo original: ${result.content.substring(0, 100)}...`);
+      
+      if (result.extractedAnswer) {
+        console.log(`\n✨ Resposta Extraída (IA): ${result.extractedAnswer}`);
+      }
+      
+      if (result.fullArticleContent) {
+        console.log(`\n📄 Artigo Completo (tamanho): ${result.fullArticleContent.length} caracteres`);
+      }
       
       if (result.titulo) console.log(`Título: ${result.titulo}`);
       if (result.capitulo) console.log(`Capítulo: ${result.capitulo}`);

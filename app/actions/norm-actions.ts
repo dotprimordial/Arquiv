@@ -3,11 +3,11 @@
 import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from '@/lib/supabase-server';
 import { submitNormForIndexing } from './seo-actions';
 import { getCachedSearch, setCachedSearch, generateSearchCacheKey } from '@/lib/cache-edge';
-import { analyzeDocumentStructure, chunkDocument, generateSectionEmbeddings } from '@/lib/semantic-search';
+import { chunkDocument, generateSectionEmbeddings, EmbeddingClient, splitContentIntoArticles } from '@/lib/semantic-search';
 import { checkRateLimit, recordSearch } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import OpenRouterClient, { OpenRouterMessage } from '@/lib/openrouter';
-import { processSearchQuery, analyzeQueryIntent, buildSearchGuidance } from '@/lib/search-utils';
+import { processSearchQuery, interpretUserQuery, removeAccents } from '@/lib/search-utils';
 
 const apiKey = process.env.OPENROUTER_API_KEY || '';
 
@@ -330,60 +330,120 @@ INSTRUÇÕES:
     // Step 5: Process sections and embeddings (semantic chunking)
     let sectionsCreated = 0;
     let embeddingsGenerated = 0;
-    
+
     const contentToProcess = formData.content || '';
-    if (contentToProcess && contentToProcess.length > 100 && apiKey && apiKey.length > 10) {
+
+    // Require chunking: abort if insufficient content or API key missing
+    if (!contentToProcess || contentToProcess.length <= 100 || !apiKey || apiKey.length <= 10) {
       try {
-        console.log(`[processAndUploadNorm] Starting semantic chunking...`);
-        
-        // Analyze document structure with AI
-        const sections = await analyzeDocumentStructure(contentToProcess, apiKey);
-        console.log(`[processAndUploadNorm] AI identified ${sections.length} sections`);
-        
-        // Chunk large sections
-        const chunks = chunkDocument(sections, 2000);
-        console.log(`[processAndUploadNorm] Created ${chunks.length} chunks`);
-        
-        // Generate embeddings for chunks
-        const chunksWithEmbeddings = await generateSectionEmbeddings(chunks, apiKey);
-        embeddingsGenerated = chunksWithEmbeddings.length;
-        console.log(`[processAndUploadNorm] Generated ${embeddingsGenerated} embeddings`);
-        
-        // Insert sections into database
-        for (let i = 0; i < chunksWithEmbeddings.length; i++) {
-          const chunk = chunksWithEmbeddings[i];
-          const { error: sectionError } = await supabaseWrite
-            .from('norm_sections')
-            .insert({
-              norm_id: normId,
-              section_type: chunk.sectionType,
-              section_number: chunk.sectionNumber,
-              section_title: chunk.sectionTitle,
-              content: chunk.content,
-              embedding: chunk.embedding,
-              order_index: i,
-            });
-          
-          if (sectionError) {
-            console.error(`[processAndUploadNorm] Failed to insert section ${i}:`, sectionError);
-          } else {
-            sectionsCreated++;
-          }
-        }
-        
-        // Update norm with section count
-        await supabaseWrite
-          .from('norms')
-          .update({ total_sections: sectionsCreated })
-          .eq('id', normId);
-        
-        console.log(`[processAndUploadNorm] ✓ Saved ${sectionsCreated} sections to database`);
-      } catch (chunkError) {
-        console.error('[processAndUploadNorm] Chunking failed (non-critical):', chunkError);
-        // Continue even if chunking fails - norm is already saved
+        await supabaseWrite.from('norms').delete().eq('id', normId);
+        console.warn('[processAndUploadNorm] Chunking skipped - norm removed:', normId);
+      } catch (delErr) {
+        console.error('[processAndUploadNorm] Falha ao remover norma após chunking skip:', delErr);
       }
-    } else {
-      console.log('[processAndUploadNorm] Skipping chunking: no content or no API key');
+      throw new Error('Chunking não executado: conteúdo insuficiente ou chave de IA não configurada. Upload cancelado.');
+    }
+
+    try {
+      console.log(`[processAndUploadNorm] Starting semantic chunking using article extraction...`);
+
+      // Extract all articles from the full document
+      const articles = splitContentIntoArticles(contentToProcess);
+      console.log(`[processAndUploadNorm] splitContentIntoArticles returned ${articles.length} articles`);
+
+      // Map articles to NormSection-like objects so chunkDocument treats each article as a primary unit
+      const sectionsForChunking = articles.map((a, idx) => ({
+        sectionType: 'artigo' as const,
+        sectionNumber: String(a.index || idx + 1),
+        sectionTitle: undefined,
+        content: a.text,
+        orderIndex: idx,
+        pageNumber: undefined,
+      }));
+
+      // Insert parent article rows to preserve parent_section_id mapping
+      const parentInserts = sectionsForChunking.map((s) => ({
+        norm_id: normId,
+        section_type: s.sectionType,
+        section_number: s.sectionNumber,
+        section_title: s.sectionTitle,
+        content: s.content,
+        content_raw: s.content,
+        parent_section_id: null,
+        embedding: null,
+        order_index: s.orderIndex,
+      }));
+
+      const { data: parentRows, error: parentError } = await supabaseWrite
+        .from('norm_sections')
+        .insert(parentInserts)
+        .select('id');
+
+      if (parentError || !parentRows) {
+        console.error('[processAndUploadNorm] Failed to insert parent article rows:', parentError);
+        await supabaseWrite.from('norms').delete().eq('id', normId);
+        throw new Error('Falha ao salvar artigos-pai no banco. Upload cancelado.');
+      }
+
+      const parentIds = parentRows.map((r: { id: string | number }) => r.id);
+
+      // Chunk articles (each article becomes at least one chunk)
+      const chunks = chunkDocument(sectionsForChunking, 5000);
+      console.log(`[processAndUploadNorm] Created ${chunks.length} chunks from ${sectionsForChunking.length} articles`);
+
+      // Generate embeddings for chunks
+      const chunksWithEmbeddings = await generateSectionEmbeddings(chunks, apiKey);
+      embeddingsGenerated = chunksWithEmbeddings.length;
+      console.log(`[processAndUploadNorm] Generated ${embeddingsGenerated} embeddings`);
+
+      // Insert each chunk into norm_sections and link to parent article
+      for (let i = 0; i < chunksWithEmbeddings.length; i++) {
+        const chunk = chunksWithEmbeddings[i];
+        // Determine parent by sectionNumber prefix (e.g., "5-2" -> 5)
+        const secNumRoot = String(chunk.sectionNumber || '').split('-')[0] || '';
+        const parentIndex = secNumRoot ? Math.max(0, Number(secNumRoot) - 1) : null;
+        const parentId = parentIndex !== null && parentIds[parentIndex] ? parentIds[parentIndex] : null;
+
+        const { error: sectionError } = await supabaseWrite
+          .from('norm_sections')
+          .insert({
+            norm_id: normId,
+            section_type: chunk.sectionType,
+            section_number: chunk.sectionNumber,
+            section_title: chunk.sectionTitle,
+            content: chunk.content,
+            content_raw: chunk.content,
+            parent_section_id: parentId,
+            embedding: chunk.embedding,
+            order_index: i,
+          });
+
+        if (sectionError) {
+          console.error(`[processAndUploadNorm] Failed to insert chunk ${i}:`, sectionError);
+          // Cleanup and abort
+          await supabaseWrite.from('norms').delete().eq('id', normId);
+          throw new Error('Falha ao salvar sections no banco. Upload cancelado.');
+        } else {
+          sectionsCreated++;
+        }
+      }
+
+      // Update norm with section count
+      await supabaseWrite
+        .from('norms')
+        .update({ total_sections: sectionsCreated })
+        .eq('id', normId);
+
+      console.log(`[processAndUploadNorm] ✓ Saved ${sectionsCreated} sections to database`);
+    } catch (chunkError) {
+      console.error('[processAndUploadNorm] Chunking failed (critical):', chunkError);
+      // Cleanup norm record on failure
+      try {
+        await supabaseWrite.from('norms').delete().eq('id', normId);
+      } catch (cleanupErr) {
+        console.error('[processAndUploadNorm] Erro ao tentar limpar norma após falha de chunking:', cleanupErr);
+      }
+      throw new Error(`Chunking failed: ${chunkError instanceof Error ? chunkError.message : String(chunkError)}. Upload cancelado.`);
     }
 
     // Submit norm for search engine indexing (non-blocking)
@@ -419,6 +479,8 @@ export interface SearchResult {
   decree?: string;
   regulationNumber?: string;
   excerpt?: string;
+  fullArticleContent?: string;
+  extractedAnswer?: string | null;
   // Estrutura hierárquica do artigo
   titulo?: string;
   capitulo?: string;
@@ -612,11 +674,10 @@ function extractBestSnippet(content: string, query: string, maxLen: number = 400
     const clean = cleanHtmlFormatting(content || '');
     if (!clean) return '';
 
-    const q = query.trim().toLowerCase();
-    const terms = q.split(/\s+/).filter(Boolean);
+    const qTerms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
 
     // If no terms, return empty (no meaningful search)
-    if (terms.length === 0) {
+    if (qTerms.length === 0) {
       return '';
     }
 
@@ -645,18 +706,22 @@ function extractBestSnippet(content: string, query: string, maxLen: number = 400
       'deve', 'ser',
     ]);
     
-    // Filter out stop words and very short terms
-    const allTerms = [...terms, ...expandedTerms]
+    // Filter out stop words and very short terms, normalize all (remove accents)
+    const allTerms = [...qTerms, ...expandedTerms]
+      .map(t => removeAccents(t))
       .filter(t => t.length >= 3)
       .filter(t => !STOP_WORDS.has(t));
 
-    console.log('[extractBestSnippet] Search terms (filtered, no stop words):', allTerms.slice(0, 10));
+    console.log('[extractBestSnippet] Search terms (filtered, normalized, no stop words):', allTerms.slice(0, 10));
+
+    // Normalize content for matching
+    const normalizedClean = removeAccents(clean);
 
     // Find earliest occurrence of any term (expanded or original)
     let idx = -1;
     let matchedTerm = '';
     for (const term of allTerms) {
-      const i = clean.toLowerCase().indexOf(term);
+      const i = normalizedClean.indexOf(term);
       if (i !== -1 && (idx === -1 || i < idx)) {
         idx = i;
         matchedTerm = term;
@@ -691,9 +756,8 @@ function extractAllSnippets(content: string, query: string, maxLen: number = 400
   const clean = cleanHtmlFormatting(content || '');
   if (!clean) return [];
 
-  const q = query.trim().toLowerCase();
-  const terms = q.split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return [];
+  const qTerms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (qTerms.length === 0) return [];
 
   const expandedTerms = processSearchQuery(query);
 
@@ -718,21 +782,22 @@ function extractAllSnippets(content: string, query: string, maxLen: number = 400
     'deve', 'ser',
   ]);
 
-  const allTerms = [...terms, ...expandedTerms]
+  const allTerms = [...qTerms, ...expandedTerms]
+    .map(t => removeAccents(t))
     .filter(t => t.length >= 3)
     .filter(t => !STOP_WORDS.has(t));
 
   if (allTerms.length === 0) return [];
 
-  const cleanLower = clean.toLowerCase();
+  const normalizedClean = removeAccents(clean);
   const half = Math.floor(maxLen / 2);
 
   // Collect all match positions for every term
   const matchPositions: number[] = [];
   for (const term of allTerms) {
     let searchFrom = 0;
-    while (searchFrom < cleanLower.length) {
-      const idx = cleanLower.indexOf(term, searchFrom);
+    while (searchFrom < normalizedClean.length) {
+      const idx = normalizedClean.indexOf(term, searchFrom);
       if (idx === -1) break;
       matchPositions.push(idx);
       searchFrom = idx + term.length;
@@ -930,13 +995,13 @@ export async function searchNormsSemantic(
   console.log('[searchNormsSemantic] Iniciando busca com IA:', { query, country, limit });
 
   // Analyze query intent to improve semantic understanding
-  const queryAnalysis = analyzeQueryIntent(query);
-  const queryGuidance = buildSearchGuidance(query);
-  console.log('[searchNormsSemantic] Query analysis:', {
-    intent: queryAnalysis.intent,
-    keywords: queryAnalysis.keywords.slice(0, 5),
-    constraints: queryAnalysis.constraints,
-    expandedTerms: queryGuidance.expandedTerms.slice(0, 10),
+  const queryInterpretation = await interpretUserQuery(query, apiKey);
+  console.log('[searchNormsSemantic] Query interpretation:', {
+    intent: queryInterpretation.intent,
+    keywords: queryInterpretation.keywords.slice(0, 5),
+    constraints: queryInterpretation.constraints,
+    expandedTerms: queryInterpretation.expandedTerms.slice(0, 10),
+    aiAnalysis: queryInterpretation.aiAnalysis,
   });
 
   // Check cache first
@@ -963,12 +1028,17 @@ export async function searchNormsSemantic(
 
   // Get IP from headers
   const getIp = async (): Promise<string> => {
-    const headersList = await headers();
-    const ip = headersList.get('cf-connecting-ip') || 
-               headersList.get('x-forwarded-for')?.split(',')[0] || 
-               headersList.get('x-real-ip') || 
-               'unknown';
-    return ip.trim();
+    try {
+      const headersList = await headers();
+      const ip = headersList.get('cf-connecting-ip') || 
+                 headersList.get('x-forwarded-for')?.split(',')[0] || 
+                 headersList.get('x-real-ip') || 
+                 'unknown';
+      return ip.trim();
+    } catch {
+      // headers() might throw an error if called outside of a Next.js request scope (e.g. CLI tests)
+      return 'unknown';
+    }
   };
 
   const clientIp = await getIp();
@@ -1008,6 +1078,179 @@ export async function searchNormsSemantic(
     return [];
   }
 
+  // === VECTOR SEARCH (primary method) ===
+  try {
+    const supabase = await getAuthenticatedSupabaseClient();
+    const cleaned = cleanHtmlFormatting(query);
+
+    // Generate query embedding
+    const embeddingClient = new EmbeddingClient(apiKey);
+    const queryEmbedding = await embeddingClient.generateEmbedding(cleaned);
+
+    // Fetch sections with embeddings from the database
+    let allowedNormIds: string[] | null = null;
+    if (country) {
+      const { data: countryData } = await supabase
+        .from('countries')
+        .select('id')
+        .eq('name', country)
+        .single();
+      const countryId = (countryData as { id?: string } | null)?.id;
+      if (countryId) {
+        const { data: normRows } = await supabase
+          .from('norms')
+          .select('id')
+          .eq('country_id', countryId)
+          .limit(500);
+        allowedNormIds = (normRows || []).map((r) => String((r as { id?: string }).id)).filter(Boolean);
+      }
+    }
+
+    let sectionsQuery = supabase
+      .from('norm_sections')
+      .select('id, norm_id, section_type, section_number, section_title, content, embedding, parent_section_id')
+      .not('embedding', 'is', null)
+      .limit(200);
+    if (allowedNormIds && allowedNormIds.length > 0) {
+      sectionsQuery = sectionsQuery.in('norm_id', allowedNormIds);
+    }
+
+    const { data: sections, error: sectionsError } = await sectionsQuery;
+    if (!sectionsError && sections && sections.length > 0) {
+      type VectorSectionRow = {
+        id: string;
+        norm_id: string;
+        section_type: string | null;
+        section_number: string | null;
+        section_title: string | null;
+        content: string | null;
+        embedding: unknown;
+        parent_section_id: string | null;
+      };
+      const vectorSections = sections as VectorSectionRow[];
+
+      // Fetch related norm metadata
+      const normIds = [...new Set(vectorSections.map(s => s.norm_id))];
+      const { data: normsMeta } = await supabase
+        .from('norms')
+        .select('id, code, title, country, countries(name)')
+        .in('id', normIds)
+        .limit(normIds.length);
+
+      const normsMetaMap = new Map<string, Record<string, unknown>>((normsMeta || []).map(n => [n.id as string, n as Record<string, unknown>]));
+
+      // Helper: decode embedding field (Supabase returns it as JSON string)
+      const parseEmbedding = (raw: unknown): number[] | null => {
+        if (Array.isArray(raw)) return raw as number[];
+        if (typeof raw === 'string') { try { return JSON.parse(raw); } catch { return null; } }
+        return null;
+      };
+
+      // Cosine similarity
+      const cosineSim = (a: number[], b: number[]): number => {
+        let dot = 0, ma = 0, mb = 0;
+        for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; ma += a[i] * a[i]; mb += b[i] * b[i]; }
+        return dot / (Math.sqrt(ma) * Math.sqrt(mb));
+      };
+
+      // Score and rank sections
+      // Use both processSearchQuery AND queryInterpretation for expanded terms
+      const processedTokens = processSearchQuery(cleaned);
+      const allSearchTerms = [
+        ...processedTokens,
+        ...(queryInterpretation.expandedTerms || []),
+        ...(queryInterpretation.concepts || []),
+        ...(queryInterpretation.suggestedSynonyms || [])
+      ];
+      // Normalize all terms (remove accents, lowercase, filter short)
+      const normalizedSearchTokens = new Set(
+        allSearchTerms
+          .map(t => removeAccents(t))
+          .filter(t => t.length >= 3)
+      );
+
+      const scored = vectorSections
+        .map((s) => {
+          const emb = parseEmbedding(s.embedding);
+          if (!emb) return null;
+          return { section: s, similarity: cosineSim(emb, queryEmbedding) };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null && r.similarity >= 0.4)
+        .filter(({ section }) => {
+          const sectionText = cleanHtmlFormatting(String(section.content || '') + ' ' + String(section.section_title || ''));
+          const normalizedSectionText = removeAccents(sectionText);
+          if (!normalizedSectionText) return false;
+          for (const t of normalizedSearchTokens) {
+            if (normalizedSectionText.includes(t)) return true;
+          }
+          return false;
+        })
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, limit);
+
+      if (scored.length > 0) {
+        console.log('[searchNormsSemantic] Vector search returned', scored.length, 'results');
+
+        // Fetch parent sections (full articles) in batch
+        const parentSectionIds = scored
+          .map(({ section }) => section.parent_section_id)
+          .filter((id): id is string => Boolean(id));
+
+        const parentContentMap = new Map<string, string>();
+        if (parentSectionIds.length > 0) {
+          const { data: parentSections } = await supabase
+            .from('norm_sections')
+            .select('id, content')
+            .in('id', parentSectionIds);
+          if (parentSections) {
+            for (const p of parentSections) {
+              parentContentMap.set(String(p.id), p.content || '');
+            }
+          }
+        }
+
+        const results: SearchResult[] = scored.map(({ section: s, similarity }, idx) => {
+          const norm = normsMetaMap.get(s.norm_id as string);
+          const countryData = (norm?.countries as Array<{ name?: string }> | undefined)?.[0];
+          const cleanContent = cleanHtmlFormatting(String(s.content || ''));
+          const parentId = s.parent_section_id;
+          const fullArticleContent = parentId ? (parentContentMap.get(String(parentId)) || cleanContent) : cleanContent;
+
+          return {
+            sectionId: `${String(s.norm_id)}-vs-${idx}`,
+            normId: String(s.norm_id),
+            normCode: (norm?.code as string) || '',
+            normTitle: (norm?.title as string) || '',
+            normCountry: countryData?.name || (norm?.country as string) || '',
+            sectionType: (s.section_type as string) || 'artigo',
+            sectionNumber: (s.section_number as string) || null,
+            sectionTitle: (s.section_title as string) || null,
+            content: cleanContent,
+            similarity: similarity,
+            decree: undefined,
+            regulationNumber: undefined,
+            excerpt: cleanContent,
+            fullArticleContent
+          };
+        });
+
+        // Post-process to extract answers and re-rank
+        const processedResults = await postProcessSearchResults(results, query, queryInterpretation.intent);
+
+        // Cache and return
+        setCachedSearch(cacheKey, processedResults);
+        console.log('[Cache] Set vector search results:', cacheKey);
+        try { await recordSearch(clientIp, 'semantic', query, country, userId); } catch {}
+        return processedResults;
+      }
+      console.log('[searchNormsSemantic] Vector search found no results above threshold, falling back...');
+    } else {
+      console.log('[searchNormsSemantic] No norm_sections with embeddings found, falling back...');
+    }
+  } catch (vectorErr) {
+    console.warn('[searchNormsSemantic] Vector search failed, falling back to AI pipeline:', vectorErr);
+  }
+
   let norms: Array<Record<string, unknown>> = [];
   
   try {
@@ -1021,6 +1264,7 @@ export async function searchNormsSemantic(
         id,
         code,
         title,
+        description,
         content,
         keywords,
         countries(name),
@@ -1060,13 +1304,21 @@ export async function searchNormsSemantic(
     // === STAGE 1: Analyze summaries to identify relevant norms ===
     console.log('[searchNormsSemantic] === ETAPA 1: Análise de resumos ===');
 
-    // Prepare summaries for AI (only id, code, title, description - no content)
-    const summariesForAI = norms.map((norm) => ({
-      id: norm.id,
-      code: cleanHtmlFormatting(String(norm.code || "")),
-      title: cleanHtmlFormatting(String(norm.title || "")),
-      description: cleanHtmlFormatting(String(norm.description || "")),
-    }));
+    // Prepare summaries for AI (id, code, title, description, keywords, summary - no full content)
+    const summariesForAI = norms.map((norm) => {
+      // Handle the array of summaries from the left join
+      const summaries = norm.summaries as Array<{ summary?: string }> | undefined;
+      const firstSummary = summaries?.[0]?.summary || "";
+      
+      return {
+        id: norm.id,
+        code: cleanHtmlFormatting(String(norm.code || "")),
+        title: cleanHtmlFormatting(String(norm.title || "")),
+        description: cleanHtmlFormatting(String(norm.description || "")),
+        keywords: (norm.keywords as string[]) || [],
+        summary: cleanHtmlFormatting(firstSummary).substring(0, 500)
+      };
+    });
 
     // Call AI to identify relevant norms based on summaries
     const summaryPrompt = `Você é um especialista em normas arquitetônicas com profundo conhecimento em:
@@ -1080,16 +1332,16 @@ export async function searchNormsSemantic(
 ANÁLISE CONTEXTUAL DA CONSULTA:
 Consulta original: "${cleanedQuery}"
 País: ${country || 'Todos'}
-Intenção detectada: ${queryAnalysis.intent}
-Restrições mencionadas: ${queryAnalysis.constraints.join(', ') || 'nenhuma'}
-Palavras-chave principais: ${queryAnalysis.keywords.join(', ')}
-Sinônimos e termos relacionados: ${queryAnalysis.suggestedSynonyms.join(', ')}
+Intenção detectada: ${queryInterpretation.intent}
+Restrições mencionadas: ${queryInterpretation.constraints.join(', ') || 'nenhuma'}
+Palavras-chave principais: ${queryInterpretation.keywords.join(', ')}
+Sinônimos e termos relacionados: ${queryInterpretation.suggestedSynonyms.join(', ')}
 
 TERMOS A BUSCAR SEMANTICAMENTE:
 O usuário está buscando sobre: "${cleanedQuery}"
 Procure especificamente por:
-- Termos exatos: ${queryAnalysis.keywords.join(', ')}
-- Variações técnicas: ${queryAnalysis.suggestedSynonyms.slice(0, 10).join(', ')}
+- Termos exatos: ${queryInterpretation.keywords.join(', ')}
+- Variações técnicas: ${queryInterpretation.suggestedSynonyms.slice(0, 10).join(', ')}
 - Se for sobre ocupação/área: busque por "coeficiente de ocupação", "índice de ocupação", "taxa de ocupação", "densidade", "aproveitamento"
 - Se for sobre altura: busque por "gabarito", "altura máxima", "número de pavimentos"
 - Se for sobre recuos: busque por "afastamento", "recuo de fachada", "margem"
@@ -1173,135 +1425,155 @@ Retorne neste formato:
     // === STAGE 2: Read full content of relevant norms and extract excerpts ===
     console.log('[searchNormsSemantic] === ETAPA 2: Extração de artigos ===');
 
-    // Prepare full content for AI (no character limit)
-    const normsForAI = normsToProcess.map((norm) => ({
-      id: norm.id,
-      code: cleanHtmlFormatting(String(norm.code || "")),
-      title: cleanHtmlFormatting(String(norm.title || "")),
-      content: cleanHtmlFormatting(String(norm.content || "")),
-      keywords: (norm.keywords as string[]) || [],
-    }));
-
-    // Call AI to extract specific excerpts from full content
-    const messages: Array<{ role: string; content: string }> = [
-      {
-        role: "user",
-        content: `Você é um especialista em normas arquitetônicas com profundo conhecimento em legislação construtiva.
-
-CONTEXTO DA CONSULTA:
-Consulta: "${cleanedQuery}"
-País: ${country || 'Todos'}
-Intenção: ${queryAnalysis.intent}
-Restrições: ${queryAnalysis.constraints.join(', ') || 'nenhuma'}
-
-TERMOS RELACIONADOS A BUSCAR:
-- Conceitos principais: ${queryAnalysis.keywords.join(', ')}
-- Sinônimos e variações: ${queryAnalysis.suggestedSynonyms.join(', ')}
-- Termos expandidos para busca: ${queryGuidance.expandedTerms.join(', ')}
-
-INTERPRETAÇÃO ESPECÍFICA PARA ESTA CONSULTA:
-${queryGuidance.hintText}
-
-ANÁLISE CONTEXTUAL:
-1. IDENTIFIQUE A INTENÇÃO: O que o usuário realmente quer saber?
-2. CONCEITOS TÉCNICOS: Quais são os termos técnicos relacionados?
-3. SINÔNIMOS: Que variações desses termos devem ser procuradas?
-
-NORMAS PARA ANÁLISE (${normsForAI.length}):
-${JSON.stringify(normsForAI, null, 2)}
-
-INSTRUÇÕES CRÍTICAS PARA EXTRAÇÃO:
-
-1. INTERPRETAÇÃO SEMÂNTICA (não literal):
-   - Procure pela INTENÇÃO da pergunta, não apenas palavras-chave
-   - Exemplo: "qual a area maxima" pode aparecer como "máximo de ocupação", "limite de área", "coeficiente", "dimensão máxima"
-   - Considere variações terminológicas e conceitos relacionados
-   - Use os termos relacionados fornecidos acima
-
-2. EXTRAÇÃO DE ARTIGOS:
-   - Encontre TODOS os artigos que respondem DIRETAMENTE à consulta
-   - Um artigo é válido se trata do conceito, mesmo com palavras diferentes
-   - Pode haver MÚLTIPLOS artigos de DIFERENTES partes do documento
-   - Extraia cada trecho como um objeto SEPARADO no array (mesma norma ID pode aparecer múltiplas vezes)
-
-3. QUALIDADE DO EXCERPT:
-   - Deve ser CITAÇÃO LITERAL E EXATA do documento
-   - Tamanho: 300-500 caracteres (máximo 800)
-   - NUNCA adicione palavras, resuma ou interprete o texto
-   - Use as palavras EXATAS do documento original
-   - Não inclua identificadores genéricos no início (ex: "Art. 5º" deve estar no campo "artigo", não no texto)
-
-4. LOCALIZAÇÃO PRECISA:
-   - Preencha os campos estruturados (artigo, capitulo, titulo) SEPARADOS do texto do excerpt
-   - Localize com precisão onde o trecho aparece no documento
-
-5. RELEVÂNCIA:
-   - Apenas inclua trechos que respondem DIRETAMENTE à consulta
-   - Cada resultado deve ter um "relevanceScore" baseado em:
-     * 0.95+: Responde exatamente a pergunta
-     * 0.8-0.94: Responde completamente mas com termos ligeiramente diferentes
-     * 0.6-0.79: Responde parcialmente ou é relacionado
-   - Exclua trechos com score < 0.6
-
-FORMATO DE RETORNO (JSON válido - array):
-[{
-  "id": "uuid da norma",
-  "reasoning": "por que este trecho específico responde à consulta (1-2 linhas)",
-  "relevanceScore": 0.95,
-  "excerpt": "CITAÇÃO EXATA LITERAL do documento - sem resumos, sem adições",
-  "artigo": "Art. 5º" (ou vazio se não aplicável),
-  "capitulo": "Capítulo II" (ou vazio),
-  "titulo": "TÍTULO III" (ou vazio)
-}]
-
-EXEMPLOS DE INTERPRETAÇÃO SEMÂNTICA:
-- Consulta: "qual deve ser a area maxima do ocupacao dos lotes"
-  Procurar por: área máxima, dimensão máxima, coeficiente de ocupação, taxa de ocupação, limite de área, ocupação máxima
-
-- Consulta: "como deve ser o acesso para deficientes"
-  Procurar por: acessibilidade, rampa, elevador, acesso universal, inclusão, mobilidade, adaptação
-
-- Consulta: "quais saidas de emergencia sao exigidas"
-  Procurar por: saída de emergência, evacuação, rotas de fuga, segurança, incêndio, prevencao`,
-      },
-    ];
-
-    console.log('[searchNormsSemantic] Enviando conteúdo completo para IA (Etapa 2)...');
-    const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://arquiv.org',
-      },
-      body: JSON.stringify({
-        model: 'anthropic/claude-3.5-haiku',
-        messages,
-        temperature: 0.3,
-        response_format: { type: "json_object" },
-      }),
+    const articlesByNormId = new Map<string, Array<{ index: number; text: string }>>();
+    normsToProcess.forEach((norm) => {
+      const fullContent = cleanHtmlFormatting(String(norm.content || ""));
+      articlesByNormId.set(String(norm.id), splitContentIntoArticles(fullContent));
     });
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('[searchNormsSemantic] Erro na API IA (Etapa 2):', aiResponse.status, errorText);
+    console.log('[searchNormsSemantic] Etapa 2: seleção determinística de artigos (sem alucinação)...');
 
-      // Fallback to textual search on rate limit or error
-      if (aiResponse.status === 429) {
-        console.warn('[searchNormsSemantic] Rate limit, usando fallback textual...');
-        return fallbackTextualSearch(norms, query, limit);
+    const normalizedQueryLower = cleanHtmlFormatting(cleanedQuery).toLowerCase();
+    const wantsMaximum = /\bmaxim/.test(normalizedQueryLower) || queryInterpretation.constraints.some((c) => /maxim/i.test(c));
+    const wantsMinimum = /\bminim/.test(normalizedQueryLower) || queryInterpretation.constraints.some((c) => /minim/i.test(c));
+    const isLimitIntent = queryInterpretation.intent === 'limit' || wantsMaximum || wantsMinimum || /\bquanto\b/.test(normalizedQueryLower);
+
+    const expandedTerms = new Set<string>([
+      ...processSearchQuery(cleanedQuery),
+      ...(queryInterpretation.expandedTerms || []),
+      ...(queryInterpretation.concepts || []),
+      ...(queryInterpretation.suggestedSynonyms || []),
+    ]
+      .map((t) => removeAccents(cleanHtmlFormatting(String(t || ''))))
+      .filter((t) => t.length >= 3)
+      .slice(0, 80));
+
+    const adminNoiseRegex = /(escala\s*\d+\/\d+|papel|dobrad|alçad|cortes?\s|plantas?\s|projecto|projeto|peças?\s+desenhadas|assinatura|requerimento|licen[cç]a|alvar[aã]|memorial|fossa|colector|coletor)/i;
+    const normativeRegex = /(não poderá|nao podera|não podera|não exceder|nao exceder|máxim|maxim|minim|limite|proibid|interdit|dever[áa]|deve\b|obrigat)/i;
+
+    const heightTerms = /(altura|cércea|cercea|gabarito|pé-direito|pe[-\s]?direito|pavimentos?|andares?|n[uú]mero\s+de\s+pisos)/i;
+    const isHeightQuery = heightTerms.test(normalizedQueryLower) || Array.from(expandedTerms).some((t) => /(altura|cercea|cércea|gabarito|pe-direito|pé-direito|pavimento|andar|piso)/i.test(t));
+
+    function isArticleAcceptable(text: string): boolean {
+      const cleanText = cleanHtmlFormatting(text);
+      const normalized = removeAccents(cleanText);
+      if (!normalized || normalized.trim().length < 80) return false;
+
+      const hasAnyExpandedTerm = Array.from(expandedTerms).some((t) => normalized.includes(t));
+      const hasNormativeSignal = normativeRegex.test(cleanText);
+      const hasAdminNoise = adminNoiseRegex.test(cleanText);
+      const hasNumber = /\d/.test(normalized);
+      const hasMaxMinLimit = /(m[aá]xima|maxim|m[ií]nima|minim|limite|não exceder|nao exceder|n[aã]o poder[aá] exceder)/i.test(cleanText);
+
+      if (isHeightQuery && !heightTerms.test(cleanText)) return false;
+
+      if (hasAdminNoise && !hasNormativeSignal) return false;
+
+      if (isLimitIntent) {
+        if (!hasNormativeSignal && !hasMaxMinLimit) return false;
+        if (wantsMaximum && !/(m[aá]xima|maxim|não exceder|nao exceder|n[aã]o poder[aá] exceder|\d|%)/i.test(cleanText)) return false;
+        if (wantsMinimum && !/(m[ií]nima|minim|\d|%)/i.test(cleanText)) return false;
+        if (!hasNumber && !hasMaxMinLimit) return false;
       }
 
-      throw new Error(`Erro na API IA: ${aiResponse.status}`);
+      return hasAnyExpandedTerm || (isHeightQuery && heightTerms.test(cleanText)) || hasNormativeSignal;
     }
 
-    const aiData = await aiResponse.json();
-    const rawText = aiData.choices?.[0]?.message?.content || "[]";
+    function scoreArticle(text: string): { score: number; hits: string[] } {
+      const cleanText = cleanHtmlFormatting(text);
+      const normalized = removeAccents(cleanText);
+      const hits: string[] = [];
 
-    // Extract JSON from response
-    const cleanedText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      let score = 0;
 
-    let aiResults: Array<{
+      for (const term of expandedTerms) {
+        if (normalized.includes(term)) {
+          score += 4;
+          if (hits.length < 8) hits.push(term);
+        }
+      }
+
+      if (normativeRegex.test(cleanText)) score += 8;
+      if (adminNoiseRegex.test(cleanText)) score -= 18;
+
+      if (isHeightQuery) {
+        if (heightTerms.test(cleanText)) score += 10;
+        if (/(altura\s+m[aá]xima|cércea|cercea|gabarito)/i.test(cleanText)) score += 10;
+        if (/(altura\s+m[ií]nima|pé[-\s]?direito\s+m[ií]nimo)/i.test(cleanText)) score += 5;
+      }
+
+      if (wantsMaximum) {
+        if (/(m[aá]xima|maxim|não exceder|nao exceder|n[aã]o poder[aá] exceder)/i.test(cleanText)) score += 12;
+        if (/(m[ií]nima|minim)/i.test(cleanText) && !/(m[aá]xima|maxim)/i.test(cleanText)) score -= 10;
+      }
+      if (wantsMinimum) {
+        if (/(m[ií]nima|minim)/i.test(cleanText)) score += 12;
+        if (/(m[aá]xima|maxim)/i.test(cleanText) && !/(m[ií]nima|minim)/i.test(cleanText)) score -= 10;
+      }
+
+      if (isLimitIntent) {
+        if (/\d/.test(normalized)) score += 6;
+        if (/%/.test(normalized)) score += 3;
+        if (!/\d/.test(normalized) && !/(m[aá]xima|maxim|m[ií]nima|minim|limite|não exceder|nao exceder|n[aã]o poder[aá] exceder)/i.test(cleanText)) {
+          score -= 12;
+        }
+      }
+
+      return { score, hits };
+    }
+
+    type DeterministicCandidate = { id: string; articleIndex: number; score: number; reasoning: string };
+    const candidates: DeterministicCandidate[] = [];
+
+    normsToProcess.forEach((norm) => {
+      const articles = articlesByNormId.get(String(norm.id));
+      if (!articles || articles.length <= 1) return;
+
+      for (let articleIndex = 1; articleIndex < articles.length; articleIndex++) {
+        const articleText = articles[articleIndex]?.text || '';
+        if (!isArticleAcceptable(articleText)) continue;
+
+        const { score, hits } = scoreArticle(articleText);
+        if (score < 12) continue;
+
+        candidates.push({
+          id: String(norm.id),
+          articleIndex,
+          score,
+          reasoning: hits.slice(0, 6).join(', '),
+        });
+      }
+    });
+
+    if (candidates.length === 0) {
+      console.warn('[searchNormsSemantic] Nenhum artigo relevante encontrado na etapa 2 determinística, usando fallback textual...');
+      const fallbackResults = await fallbackTextualSearch(norms, query, limit);
+      const processedResults = await postProcessSearchResults(fallbackResults, query, queryInterpretation.intent);
+      if (cacheKey) {
+        setCachedSearch(cacheKey, processedResults);
+      }
+      return processedResults;
+    }
+
+    const perNormTop = new Map<string, DeterministicCandidate[]>();
+    for (const c of candidates.sort((a, b) => b.score - a.score)) {
+      const list = perNormTop.get(c.id) || [];
+      if (list.length >= 3) continue;
+      list.push(c);
+      perNormTop.set(c.id, list);
+    }
+
+    const flattened = Array.from(perNormTop.values())
+      .flatMap((list) => {
+        if (list.length <= 1) return list;
+        const best = list[0].score;
+        const cutoff = Math.max(12, Math.floor(best * 0.65));
+        return list.filter((c) => c.score >= cutoff);
+      })
+      .sort((a, b) => b.score - a.score);
+    const maxScore = Math.max(...flattened.map((c) => c.score), 1);
+
+    const aiResults: Array<{
       id: string;
       reasoning: string;
       relevanceScore: number;
@@ -1309,48 +1581,81 @@ EXEMPLOS DE INTERPRETAÇÃO SEMÂNTICA:
       artigo?: string;
       capitulo?: string;
       titulo?: string;
-    }>;
-    try {
-      const parsed = JSON.parse(cleanedText);
-      aiResults = Array.isArray(parsed) ? parsed : parsed.results || [];
-    } catch {
-      console.error('[searchNormsSemantic] Erro ao parsear JSON IA (Etapa 2):', cleanedText.substring(0, 200));
-      aiResults = [];
-    }
+      articleIndex?: number;
+    }> = flattened.slice(0, Math.max(1, limit)).map((c) => {
+      const normalized = Math.min(0.99, 0.6 + 0.39 * (c.score / maxScore));
+      return {
+        id: c.id,
+        reasoning: c.reasoning || 'Seleção determinística por termos e padrão normativo.',
+        relevanceScore: normalized,
+        articleIndex: c.articleIndex,
+      };
+    });
 
-    console.log('[searchNormsSemantic] Etapa 2: Resultados IA:', aiResults.length);
+    console.log('[searchNormsSemantic] Etapa 2: artigos selecionados:', aiResults.length);
 
-    // If AI returns no results, return empty array
+    // If AI returns no results, fallback to textual search
     if (aiResults.length === 0) {
-      console.warn('[searchNormsSemantic] Nenhum resultado encontrado na etapa 2');
-      return [];
+      console.warn('[searchNormsSemantic] Nenhum resultado encontrado na etapa 2, usando fallback textual...');
+      const fallbackResults = await fallbackTextualSearch(norms, query, limit);
+      const processedResults = await postProcessSearchResults(fallbackResults, query, queryInterpretation.intent);
+      if (cacheKey) {
+        setCachedSearch(cacheKey, processedResults);
+      }
+      return processedResults;
     }
+
+    // Normalize articleIndex to number
+    aiResults.forEach((r) => {
+      r.articleIndex = r.articleIndex !== undefined ? Number(r.articleIndex) : undefined;
+    });
 
     // Map AI results to SearchResult format
-    // Filter out results without valid excerpt OR with excerpts that are document-length
-    const MAX_EXCERPT_LENGTH = 2000; // Máximo de caracteres para um artigo válido (aumentado)
-    const MIN_EXCERPT_LENGTH = 50; // Mínimo de caracteres (reduzido temporariamente)
+    // Build excerpt from pre-split articles whenever articleIndex is available
+    const MIN_EXCERPT_LENGTH = 50;
 
-    const validAiResults = aiResults.filter((r) => {
-      if (!r.excerpt || r.excerpt.trim().length < MIN_EXCERPT_LENGTH) return false;
-      // If excerpt is excessively long, replace with a best-effort snippet centered on query
-      if (r.excerpt.trim().length > MAX_EXCERPT_LENGTH) {
-        console.warn(`[searchNormsSemantic] Excerpt muito longo (${r.excerpt.trim().length} chars), extracting best snippet...`);
-        // Try to extract a better snippet from the original norm content if available
-        const norm = norms.find((n) => n.id === r.id);
-        if (norm && norm.content) {
-          r.excerpt = extractBestSnippet(String(norm.content), cleanedQuery, MAX_EXCERPT_LENGTH);
-        } else {
-          r.excerpt = r.excerpt.trim().substring(0, MAX_EXCERPT_LENGTH) + '...';
-        }
+    function excerptMatchesQuery(excerpt: string, query: string, relevanceScore: number): boolean {
+      const cleanExcerpt = cleanHtmlFormatting(excerpt).toLowerCase();
+      if (!cleanExcerpt) return false;
+
+      // If AI is extremely confident, trust it more
+      if (relevanceScore >= 0.9) return true;
+
+      const searchTerms = new Set<string>([
+        ...processSearchQuery(query).filter((t) => t.length >= 3),
+        ...(query.toLowerCase().match(/\b[\p{L}0-9]{3,}\b/gu) || []),
+      ]);
+
+      // Also match numbers specifically
+      const queryNumbers: string[] = query.match(/\d+/g) ?? [];
+      const excerptNumbers: string[] = cleanExcerpt.match(/\d+/g) ?? [];
+      
+      for (const num of queryNumbers) {
+        if (excerptNumbers.includes(num)) return true;
       }
 
-      // TEMPORARILY DISABLED: Ensure the excerpt actually contains one of the query terms
-      // const excerptLower = (r.excerpt || '').toLowerCase();
-      // const terms = cleanedQuery.split(/\s+/).filter(Boolean);
-      // const containsTerm = terms.some(t => t && excerptLower.includes(t));
-      // return containsTerm;
-      return true;
+      for (const term of searchTerms) {
+        if (cleanExcerpt.includes(term)) return true;
+      }
+      return false;
+    }
+
+    const validAiResults = aiResults.filter((r) => {
+      if (typeof r.relevanceScore !== 'number' || Number.isNaN(r.relevanceScore) || r.relevanceScore < 0.6) {
+        return false;
+      }
+
+      const articles = articlesByNormId.get(String(r.id));
+      const articleIndex = Number.isInteger(r.articleIndex) ? Number(r.articleIndex) : undefined;
+      const hasValidArticleIndex = articleIndex !== undefined && articleIndex > 0 && articles && !!articles[articleIndex];
+      if (hasValidArticleIndex) {
+        r.excerpt = articles[articleIndex].text;
+        if (!r.excerpt || r.excerpt.trim().length < MIN_EXCERPT_LENGTH) return false;
+        return excerptMatchesQuery(r.excerpt, cleanedQuery, r.relevanceScore);
+      }
+
+      // If there is no valid articleIndex, reject the result to avoid invented mappings
+      return false;
     });
     
     console.log('[searchNormsSemantic] Resultados válidos com excerpt:', validAiResults.length);
@@ -1358,7 +1663,12 @@ EXEMPLOS DE INTERPRETAÇÃO SEMÂNTICA:
     // If no valid excerpts, use fallback
     if (validAiResults.length === 0) {
       console.warn('[searchNormsSemantic] IA retornou resultados sem excerpts válidos, usando fallback...');
-      return fallbackTextualSearch(norms, query, limit, cacheKey);
+      const fallbackResults = await fallbackTextualSearch(norms, query, limit);
+      const processedResults = await postProcessSearchResults(fallbackResults, query, queryInterpretation.intent);
+      if (cacheKey) {
+        setCachedSearch(cacheKey, processedResults);
+      }
+      return processedResults;
     }
     
     // Use index to create unique sectionId for multiple excerpts from same norm
@@ -1368,19 +1678,18 @@ EXEMPLOS DE INTERPRETAÇÃO SEMÂNTICA:
       .map((aiResult, index) => {
         const norm = norms.find((n) => n.id === aiResult.id);
         if (!norm) return null;
-        
+
         // Extract country name from joined countries data (Supabase returns {countries: {name: "..."}})
         const countryData = norm.countries as { name?: string } | undefined;
         const countryName = countryData?.name || '';
-        
+
         // Create unique sectionId using index to handle multiple excerpts from same norm
         const uniqueSectionId = `${String(norm.id)}-${index}`;
-        
-        // Use excerpt as content, never fall back to full document
+
+        // If articleIndex is valid, excerpt is already the full literal article text from pre-split data
         let excerpt = aiResult.excerpt?.trim() || '';
-        // Ensure excerpt is concise and centered on the query
-        if (excerpt.length > 500) {
-          // Prefer AI excerpt truncated, but if it's likely the full document use original content to extract snippet
+        const hasArticleIndex = aiResult.articleIndex !== undefined && aiResult.articleIndex > 0;
+        if (!hasArticleIndex && excerpt.length > 500) {
           const normFull = String(norm.content || '');
           excerpt = extractBestSnippet(normFull, cleanedQuery, 500);
         }
@@ -1420,14 +1729,17 @@ EXEMPLOS DE INTERPRETAÇÃO SEMÂNTICA:
           decree: undefined,
           regulationNumber: undefined,
           excerpt: excerpt,
+          fullArticleContent: excerpt,
           // Spreading all hierarchy fields (titulo, capitulo, artigo, etc.)
           ...hierarchy
         };
       })
-      .filter((r) => r !== null);
+      .filter((r) => r !== null) as SearchResult[];
+
+    const processedResults = await postProcessSearchResults(results, query, queryInterpretation.intent);
 
     // Cache the results
-    setCachedSearch(cacheKey, results as SearchResult[]);
+    setCachedSearch(cacheKey, processedResults);
     console.log('[Cache] Set semantic search results:', cacheKey);
 
     // Record search for rate limiting (by IP)
@@ -1439,7 +1751,7 @@ EXEMPLOS DE INTERPRETAÇÃO SEMÂNTICA:
       console.warn('[searchNormsSemantic] Erro ao registrar busca:', err);
     }
 
-    return results as SearchResult[];
+    return processedResults;
   } catch {
     console.error('[searchNormsSemantic] Ocorreu um erro interno na IA');
     
@@ -1451,12 +1763,167 @@ EXEMPLOS DE INTERPRETAÇÃO SEMÂNTICA:
     } catch (fallbackErr) {
       console.warn('[searchNormsSemantic] Erro ao registrar busca (fallback):', fallbackErr);
     }
-    return fallbackTextualSearch(norms, query, limit, cacheKey);
+    const fallbackResults = await fallbackTextualSearch(norms, query, limit);
+    const processedResults = await postProcessSearchResults(fallbackResults, query, queryInterpretation.intent);
+    if (cacheKey) {
+      setCachedSearch(cacheKey, processedResults);
+    }
+    return processedResults;
   }
 }
 
+
+function findBestMatchingArticle(
+  excerpt: string,
+  hierarchyArtigo: string | undefined,
+  articles: Array<{ id: string; section_number: string; content: string }>
+): string | null {
+  if (!articles || articles.length === 0) return null;
+
+  // 1. Try match by article number
+  if (hierarchyArtigo) {
+    const numMatch = hierarchyArtigo.match(/\d+/);
+    if (numMatch) {
+      const artNum = numMatch[0];
+      const found = articles.find(a => a.section_number === artNum);
+      if (found) return found.content;
+    }
+  }
+
+  // 2. Try match by excerpt containment
+  const cleanExcerpt = excerpt.replace(/^\.\.\.|\.\.\.$/g, '').trim().toLowerCase();
+  if (cleanExcerpt.length > 10) {
+    const found = articles.find(a => a.content.toLowerCase().includes(cleanExcerpt));
+    if (found) return found.content;
+
+    // Fuzzy: check word overlap or substring
+    const words = cleanExcerpt.split(/\s+/).filter(w => w.length > 4);
+    if (words.length > 0) {
+      let bestArt: typeof articles[0] | null = null;
+      let maxMatches = 0;
+      for (const art of articles) {
+        const artContentLower = art.content.toLowerCase();
+        let matches = 0;
+        for (const w of words) {
+          if (artContentLower.includes(w)) matches++;
+        }
+        if (matches > maxMatches) {
+          maxMatches = matches;
+          bestArt = art;
+        }
+      }
+      if (bestArt && maxMatches >= words.length / 2) {
+        return bestArt.content;
+      }
+    }
+  }
+
+  return null;
+}
+
+export async function extractAnswerFromArticle(
+  query: string,
+  articleContent: string,
+  apiKey: string
+): Promise<string | null> {
+  if (!apiKey || apiKey.length < 10) return null;
+
+  // Cache key based on query and hashed/shortened article content
+  const articleKey = articleContent.substring(0, 200).replace(/[^a-zA-Z0-9]/g, '');
+  const cacheKey = `answer:${query.toLowerCase().trim()}:${articleKey}`;
+  const cached = getCachedSearch<string | null>(cacheKey);
+  if (cached !== undefined) {
+    console.log('[Cache] Hit for extractAnswerFromArticle:', cacheKey);
+    return cached;
+  }
+
+  try {
+    const openRouter = new OpenRouterClient(apiKey);
+    const prompt = `Você é um especialista em normas técnicas arquitetônicas. Sua tarefa é responder à pergunta do usuário usando APENAS as informações presentes no artigo fornecido.
+
+Pergunta: "${query}"
+
+Artigo:
+"""
+${articleContent}
+"""
+
+INSTRUÇÕES:
+1. Se o artigo contiver a resposta direta para a pergunta (especialmente limites, valores, dimensões, recuos, exigências), extraia a resposta de forma clara, direta e objetiva em português (ex: "A altura máxima permitida é de 25 metros").
+2. Seja extremamente conciso. Responda em apenas uma frase direta, se possível.
+3. Se o artigo NÃO contiver a resposta para a pergunta, responda apenas com "N/A".
+4. NUNCA invente informações. Use apenas o que está escrito no artigo.`;
+
+    const messages: OpenRouterMessage[] = [{ role: 'user', content: prompt }];
+    const response = await openRouter.chatCompletion(
+      messages,
+      'anthropic/claude-3.5-haiku',
+      0.3
+    );
+
+    const answer = response.choices[0]?.message?.content?.trim() || '';
+    
+    if (!answer || answer.toUpperCase() === 'N/A' || answer.toLowerCase().includes('não cont') || answer.toLowerCase().includes('não há') || answer.toLowerCase().includes('não menciona')) {
+      setCachedSearch(cacheKey, null, 1800); // cache negative results for 30 minutes
+      return null;
+    }
+
+    setCachedSearch(cacheKey, answer, 1800); // cache positive results for 30 minutes
+    return answer;
+  } catch (error) {
+    console.error('[extractAnswerFromArticle] Erro ao extrair resposta:', error);
+    return null;
+  }
+}
+
+async function postProcessSearchResults(
+  results: SearchResult[],
+  query: string,
+  intent: string
+): Promise<SearchResult[]> {
+  if (results.length === 0) return results;
+
+  console.log(`[postProcessSearchResults] Extracting answers for query "${query}" (intent: ${intent})`);
+
+  const topResults = results.slice(0, 3);
+  const remainingResults = results.slice(3);
+
+  const processedTop = await Promise.all(
+    topResults.map(async (res) => {
+      const articleContent = res.fullArticleContent || res.content;
+      const answer = await extractAnswerFromArticle(query, articleContent, apiKey);
+      return {
+        ...res,
+        extractedAnswer: answer,
+        fullArticleContent: articleContent
+      };
+    })
+  );
+
+  const allProcessed = [...processedTop, ...remainingResults.map(res => ({
+    ...res,
+    fullArticleContent: res.fullArticleContent || res.content
+  }))];
+
+  const ranked = allProcessed
+    .map((res) => {
+      let score = res.similarity;
+      if (res.extractedAnswer) {
+        score += 0.3;
+        if (/\d+/.test(res.extractedAnswer)) {
+          score += 0.1;
+        }
+      }
+      return { res, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map(({ res }) => res);
+
+  return ranked;
+}
+
 // Fallback textual search function
-function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: string, limit: number, cacheKey?: string): SearchResult[] {
+async function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: string, limit: number): Promise<SearchResult[]> {
   const queryLower = cleanHtmlFormatting(query).toLowerCase();
   
   // Use processSearchQuery to expand terms with synonyms for better matching
@@ -1489,6 +1956,23 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
     return { norm, score };
   }).filter(item => item.score > 0);
   
+  const normIds = [...new Set(scored.map(item => String(item.norm.id)))];
+  const supabase = await getAuthenticatedSupabaseClient();
+  const { data: allArticles } = await supabase
+    .from('norm_sections')
+    .select('id, norm_id, section_number, content')
+    .in('norm_id', normIds)
+    .eq('section_type', 'artigo');
+
+  const articlesByNorm = new Map<string, Array<{ id: string; section_number: string; content: string }>>();
+  if (allArticles) {
+    for (const art of allArticles) {
+      const list = articlesByNorm.get(String(art.norm_id)) || [];
+      list.push({ id: String(art.id), section_number: String(art.section_number || ''), content: art.content || '' });
+      articlesByNorm.set(String(art.norm_id), list);
+    }
+  }
+
   // Flatten: each norm can produce multiple excerpts (one SearchResult per excerpt)
   const results: SearchResult[] = scored
     .sort((a, b) => b.score - a.score)
@@ -1508,31 +1992,33 @@ function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: str
 
       console.log('[fallbackTextualSearch] Found', excerpts.length, 'excerpts for norm:', item.norm.code);
 
-      return excerpts.map((excerpt, excerptIndex) => ({
-        sectionId: `${String(item.norm.id)}-${normIndex}-${excerptIndex}`,
-        normId: String(item.norm.id),
-        normCode: (item.norm.code as string) || '',
-        normTitle: (item.norm.title as string) || '',
-        normCountry: countryName,
-        sectionType: 'norma',
-        sectionNumber: null,
-        sectionTitle: null,
-        content: excerpt,
-        similarity: item.score / 10,
-        decree: undefined,
-        regulationNumber: undefined,
-        excerpt: excerpt,
-        ...parseHierarchyFromText(excerpt, fullContent),
-      }));
+      const normArticles = articlesByNorm.get(String(item.norm.id)) || [];
+
+      return excerpts.map((excerpt, excerptIndex) => {
+        const parsedHierarchy = parseHierarchyFromText(excerpt, fullContent);
+        const fullArticleContent = findBestMatchingArticle(excerpt, parsedHierarchy.artigo, normArticles) || excerpt;
+
+        return {
+          sectionId: `${String(item.norm.id)}-${normIndex}-${excerptIndex}`,
+          normId: String(item.norm.id),
+          normCode: (item.norm.code as string) || '',
+          normTitle: (item.norm.title as string) || '',
+          normCountry: countryName,
+          sectionType: 'norma',
+          sectionNumber: null,
+          sectionTitle: null,
+          content: excerpt,
+          similarity: item.score / 10,
+          decree: undefined,
+          regulationNumber: undefined,
+          excerpt: excerpt,
+          fullArticleContent,
+          ...parsedHierarchy,
+        };
+      });
     });
   
-  // Cache the fallback results if cache key provided
-  if (cacheKey) {
-    setCachedSearch(cacheKey, results);
-    console.log('[Cache] Set fallback search results:', cacheKey);
-  }
-  
-  return results;
+  return results.slice(0, Math.max(1, limit));
 }
 
 // FIX #7: deleteNormServer — Server Action para contornar RLS do cliente

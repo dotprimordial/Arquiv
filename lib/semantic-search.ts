@@ -1,4 +1,5 @@
-import { OpenRouterClient, OpenRouterMessage } from './openrouter';
+import { OpenRouterClient } from './openrouter.ts';
+import type { OpenRouterMessage } from './openrouter.ts';
 
 // Embedding API using OpenRouter (OpenAI compatible)
 export class EmbeddingClient {
@@ -21,7 +22,7 @@ export class EmbeddingClient {
           'X-Title': 'Arquiv - Semantic Search',
         },
         body: JSON.stringify({
-          model: 'perplexity/pplx-embed-v1-4b',
+          model: 'text-embedding-3-small',
           input: text.substring(0, 8000),
         }),
       });
@@ -53,6 +54,7 @@ export interface NormSection {
   orderIndex: number;
   parentNumber?: string;
   pageNumber?: number;
+  aiInterpretation?: string; // New field for AI interpretation
 }
 
 // AI-powered document analyzer
@@ -137,53 +139,170 @@ Responda APENAS em JSON válido no formato:
 // Smart chunking for large documents
 export function chunkDocument(
   sections: NormSection[],
-  maxChunkSize: number = 2000
+  maxChunkSize: number = 5000,
+  minChunkSize: number = 300,
+  overlapChars: number = 200
 ): NormSection[] {
   const chunks: NormSection[] = [];
 
   for (const section of sections) {
-    if (section.content.length <= maxChunkSize) {
-      chunks.push(section);
+    const text = String(section.content || '').trim();
+    if (text.length === 0) continue;
+
+    // If the whole article fits, use it as a single chunk
+    if (text.length <= maxChunkSize) {
+      chunks.push({ ...section, content: text });
       continue;
     }
 
-    const contentParts = splitContent(section.content, maxChunkSize);
-    
-    contentParts.forEach((part, index) => {
-      chunks.push({
+    // Prefer paragraph splitting
+    const paragraphs = splitByParagraph(text);
+    let current = '';
+    const sectionChunks: NormSection[] = [];
+
+    for (let i = 0; i < paragraphs.length; i++) {
+      const p = paragraphs[i].trim();
+      if (!p) continue;
+
+      // accumulate paragraph while below max size
+      if ((current + '\n\n' + p).trim().length <= maxChunkSize) {
+        current = (current + '\n\n' + p).trim();
+        continue;
+      }
+
+      // if current is too small, try to join with paragraph
+      if (current.length > 0 && current.length < minChunkSize) {
+        current = (current + '\n\n' + p).trim();
+        continue;
+      }
+
+      // push current as chunk
+      if (current.length > 0) {
+        sectionChunks.push({
+          ...section,
+          content: current,
+          sectionNumber: section.sectionNumber,
+          orderIndex: section.orderIndex,
+        });
+      }
+
+      // start new current with paragraph or split paragraph if it's huge
+      if (p.length <= maxChunkSize) {
+        current = p;
+      } else {
+        const parts = splitContent(p, maxChunkSize, overlapChars);
+        for (let j = 0; j < parts.length; j++) {
+          sectionChunks.push({
+            ...section,
+            content: parts[j],
+            sectionNumber: `${section.sectionNumber || ''}-${j + 1}`,
+            orderIndex: section.orderIndex + (j + 1) * 0.001,
+          });
+        }
+        current = '';
+      }
+    }
+
+    if (current && current.length > 0) {
+      sectionChunks.push({
         ...section,
-        content: part,
-        sectionNumber: index === 0 
-          ? section.sectionNumber 
-          : `${section.sectionNumber}-${index + 1}`,
-        orderIndex: section.orderIndex + index * 0.1,
+        content: current,
+        sectionNumber: section.sectionNumber,
+        orderIndex: section.orderIndex,
       });
-    });
+    }
+
+    // Merge very small chunks only within the same section
+    const mergedSectionChunks: NormSection[] = [];
+    for (let i = 0; i < sectionChunks.length; i++) {
+      const c = sectionChunks[i];
+      if (c.content.length < minChunkSize && i + 1 < sectionChunks.length) {
+        const next = sectionChunks[i + 1];
+        mergedSectionChunks.push({
+          ...next,
+          content: (c.content + '\n\n' + next.content).trim(),
+          sectionNumber: next.sectionNumber,
+          orderIndex: c.orderIndex,
+        });
+        i++; // skip next because merged
+      } else {
+        mergedSectionChunks.push(c);
+      }
+    }
+
+    chunks.push(...mergedSectionChunks);
   }
 
   return chunks.sort((a, b) => a.orderIndex - b.orderIndex);
 }
 
-function splitContent(content: string, maxSize: number): string[] {
-  const parts: string[] = [];
+function splitByParagraph(text: string): string[] {
+  return text.split(/\n{2,}/g).map(s => s.trim()).filter(Boolean);
+}
+
+function splitContent(content: string, maxSize: number, overlap: number = 200): string[] {
   const sentences = content.split(/(?<=[.!?])\s+/);
-  
-  let currentPart = '';
-  
-  for (const sentence of sentences) {
-    if ((currentPart + sentence).length > maxSize && currentPart.length > 0) {
-      parts.push(currentPart.trim());
-      currentPart = sentence;
+  const parts: string[] = [];
+  let current = '';
+
+  for (const s of sentences) {
+    if ((current + ' ' + s).trim().length <= maxSize) {
+      current = (current + ' ' + s).trim();
     } else {
-      currentPart += ' ' + sentence;
+      if (current) parts.push(current);
+      current = s.trim();
     }
   }
+  if (current) parts.push(current);
+
+  // apply overlap
+  if (parts.length > 1 && overlap > 0) {
+    const withOverlap: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      let chunk = parts[i];
+      if (i > 0) {
+        const prev = withOverlap[withOverlap.length - 1] || parts[i - 1];
+        const tail = prev.slice(-overlap);
+        chunk = (tail + '\n\n' + chunk).trim();
+      }
+      withOverlap.push(chunk);
+    }
+    return withOverlap;
+  }
+
+  return parts;
+}
+
+export function splitContentIntoArticles(content: string): Array<{ index: number; text: string }> {
+  const normalized = content.replace(/\r\n/g, '\n').trim();
+  // Regex mais robusta para Artigo, Art., e variantes, sem depender de quebras de linha.
+  // Muitos conteúdos chegam como HTML e podem ter "Art." precedido por tags como "<p>".
+  const articleRegex = /(?:Art(?:igo)?\.?\s*\d+[º°]?(?:\s*-\s*[A-Za-z\u00C0-\u00FF])?|§\s*\d+[º°]?)/gi;
+  const matches: Array<{ index: number; header: string }> = [];
+  let match: RegExpExecArray | null;
   
-  if (currentPart.trim()) {
-    parts.push(currentPart.trim());
+  while ((match = articleRegex.exec(normalized)) !== null) {
+    matches.push({ index: match.index, header: match[0].trim() });
   }
   
-  return parts.length > 0 ? parts : [content.substring(0, maxSize)];
+  if (matches.length === 0) {
+    return [{ index: 0, text: normalized }];
+  }
+  
+  const result: Array<{ index: number; text: string }> = [];
+  
+  // Captura o texto antes do primeiro artigo (geralmente preâmbulo ou definições)
+  if (matches[0].index > 0) {
+    result.push({ index: 0, text: normalized.substring(0, matches[0].index).trim() });
+  }
+  
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].index;
+    const end = i + 1 < matches.length ? matches[i + 1].index : normalized.length;
+    result.push({ index: i + 1, text: normalized.substring(start, end).trim() });
+  }
+  
+  return result;
 }
 
 // Generate embeddings for sections
@@ -193,33 +312,89 @@ export async function generateSectionEmbeddings(
 ): Promise<(NormSection & { embedding: number[] })[]> {
   const embeddingClient = new EmbeddingClient(apiKey);
   const results: (NormSection & { embedding: number[] })[] = [];
+  const failures: { section: NormSection; error: unknown }[] = [];
 
   const batchSize = 10;
+  const maxRetries = 3;
+
   for (let i = 0; i < sections.length; i += batchSize) {
     const batch = sections.slice(i, i + batchSize);
-    
+
     const batchPromises = batch.map(async (section) => {
-      try {
-        const textForEmbedding = `${section.sectionType} ${section.sectionNumber || ''}: ${section.sectionTitle || ''}\n${section.content}`;
-        const embedding = await embeddingClient.generateEmbedding(textForEmbedding);
-        
-        return {
-          ...section,
-          embedding,
-        };
-      } catch (error) {
-        console.error(`Erro ao gerar embedding para ${section.sectionNumber}:`, error);
-        return null;
+      const textForEmbedding = `${section.sectionType} ${section.sectionNumber || ''}: ${section.sectionTitle || ''}\n${section.content}`;
+      let attempt = 0;
+      while (attempt < maxRetries) {
+        try {
+          const embedding = await embeddingClient.generateEmbedding(textForEmbedding);
+          return {
+            ...section,
+            embedding,
+          } as NormSection & { embedding: number[] };
+        } catch (err) {
+          attempt++;
+          const backoff = 500 * Math.pow(2, attempt); // 1st ~1000ms, then ~2000ms, etc.
+          console.warn(`[generateSectionEmbeddings] Embedding attempt ${attempt} failed for section ${section.sectionNumber || 'n/a'}. Retrying in ${backoff}ms`, err);
+          if (attempt >= maxRetries) {
+            failures.push({ section, error: err });
+            console.error(`[generateSectionEmbeddings] Failed to generate embedding for section ${section.sectionNumber || 'n/a'} after ${attempt} attempts`, err);
+            return null;
+          }
+          await new Promise((r) => setTimeout(r, backoff));
+        }
       }
+      return null;
     });
 
     const batchResults = await Promise.all(batchPromises);
     results.push(...batchResults.filter((r): r is (NormSection & { embedding: number[] }) => r !== null));
-    
+
     if (i + batchSize < sections.length) {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // small throttle to avoid aggressive rate limits
+      await new Promise((r) => setTimeout(r, 250));
     }
   }
 
+  if (failures.length > 0) {
+    console.warn('[generateSectionEmbeddings] Some embeddings failed to generate:', failures.length);
+  }
+
   return results;
+}
+
+export async function generateArticleInterpretation(section: NormSection, apiKey: string): Promise<string> {
+  if (!apiKey || apiKey.length < 10) {
+    console.warn('[generateArticleInterpretation] API Key não configurada, retornando texto vazio');
+    return '';
+  }
+
+  const openRouter = new OpenRouterClient(apiKey);
+
+  const prompt = `Você é um especialista em normas arquitetônicas e de construção. Sua tarefa é fornecer uma interpretação concisa e clara do seguinte trecho de uma norma.
+
+INSTRUÇÕES:
+1.  **Precisão Técnica**: Identifique e destaque valores exatos (ex: 70%, 3 metros, coeficientes). Nunca omita limites numéricos.
+2.  **Interpretação Concisa**: Resuma o trecho em 1-3 frases, focando no ponto principal.
+3.  **Linguagem Clara**: Use linguagem direta e evite jargões excessivos, a menos que sejam essenciais.
+4.  **Implicações Práticas**: Mencione o que o trecho significa na prática para um projeto (ex: "O edifício não pode ocupar mais de 70% do lote").
+5.  **Formato**: Retorne APENAS a interpretação em texto puro, sem introduções.
+
+Trecho da Norma (Tipo: ${section.sectionType}, Número: ${section.sectionNumber || 'N/A'}, Título: ${section.sectionTitle || 'N/A'}):
+"""
+${section.content}
+"""`;
+
+  const messages: OpenRouterMessage[] = [{ role: "user", content: prompt }];
+
+  try {
+    const response = await openRouter.chatCompletion(
+      messages,
+      'anthropic/claude-3.5-haiku',
+      0.3
+    );
+
+    return response.choices[0]?.message?.content?.trim() || '';
+  } catch (error) {
+    console.error(`[generateArticleInterpretation] Erro ao gerar interpretação para seção ${section.sectionNumber}:`, error);
+    return '';
+  }
 }

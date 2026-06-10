@@ -33,8 +33,16 @@ export function SearchRateLimitDisplay({ onLimitExceeded, compact = false }: Sea
     const fetchStatus = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/search/rate-limit');
-        
+        const apiUrl = typeof window !== 'undefined'
+          ? new URL('/api/search/rate-limit', window.location.href).toString()
+          : '/api/search/rate-limit';
+
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+
         // If response not ok, treat as no status (e.g., server unavailable)
         if (!response.ok) {
           console.warn('[SearchRateLimitDisplay] Rate limit endpoint returned', response.status);
@@ -51,9 +59,8 @@ export function SearchRateLimitDisplay({ onLimitExceeded, compact = false }: Sea
           onLimitExceeded(data.rateLimit.reason);
         }
       } catch (err) {
-        const error = err as Error;
-        // Do not expose raw error to UI; log for debugging
-        console.error('[SearchRateLimitDisplay] Error fetching rate limit:', error);
+        // Failed to fetch can happen when the API is temporarily unreachable.
+        console.warn('[SearchRateLimitDisplay] Rate limit fetch failed:', err);
         setError(null);
         setStatus(null);
       } finally {

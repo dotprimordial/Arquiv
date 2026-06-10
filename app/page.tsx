@@ -169,8 +169,17 @@ export default function Home() {
           console.log('Usando busca semântica com IA para:', query);
           try {
             const results = await searchNormsSemantic(query, country, 20);
-            setSemanticResults(results);
-            setNorms(null);
+            if (results && results.length > 0) {
+              setSemanticResults(results);
+              setNorms(null);
+            } else {
+              console.warn('Busca semântica retornou vazio, usando busca tradicional como fallback');
+              setIsAiSearchEnabled(false);
+              const data = await getArchitecturalNorms(country, category, query, false, page, pageSize);
+              setNorms(data.norms);
+              setTotalNormsCount(data.totalCount);
+              setSemanticResults(null);
+            }
           } catch (semanticErr) {
             console.error('Busca semântica falhou, usando busca tradicional:', semanticErr);
 

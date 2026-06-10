@@ -45,19 +45,22 @@ const SYNONYM_MAPPINGS: Record<string, string[]> = {
   'estrutura': ['estrutura', 'armacao', 'esqueleto', 'construcao', 'fundacao'],
   'fundação': ['fundacao', 'alicerce', 'estrutura', 'base', 'estaqueamento'],
 
-  // Segurança
-  'segurança': ['seguranca', 'protecao', 'defesa', 'risco', 'perigo', 'prevencao'],
-  'incêndio': ['incendio', 'fogo', 'combustao', 'queimadura', 'safety', 'prevencao'],
+  // Incêndio
+  'incêndio': ['incendio', 'fogo', 'combustao', 'safety', 'prevencao', 'scie', 'extincao', 'compartimentacao', 'fumo'],
+  'segurança': ['seguranca', 'protecao', 'defesa', 'risco', 'perigo', 'prevencao', 'estabilidade', 'resistencia'],
   'risco': ['risco', 'perigo', 'ameaca', 'vulnerabilidade', 'seguranca'],
   'proteção': ['protecao', 'seguranca', 'defesa', 'prevencao', 'resistencia'],
   'evacuação': ['evacuacao', 'fuga', 'saida', 'rota', 'passagem'],
 
   // Altura/dimensões
-  'altura': ['altura', 'elevacao', 'comprimento', 'nivel', 'piso', 'pavimento'],
+  'altura': ['altura', 'cercea', 'gabarito', 'pavimento', 'piso', 'andar', 'vertical', 'cota', 'nivel'],
+  'cércea': ['cercea', 'altura', 'gabarito', 'pavimento', 'piso', 'andar', 'limite vertical'],
+  'piso': ['piso', 'pavimento', 'andar', 'nivel', 'cota', 'altura'],
   'largura': ['largura', 'extensao', 'dimensao', 'tamanho', 'amplitude'],
   'profundidade': ['profundidade', 'dimensao', 'espessura', 'tamanho'],
-  'área': ['area', 'espaco', 'superficie', 'metragem', 'tamanho', 'extensao'],
-  'coeficiente': ['coeficiente', 'indice', 'taxa', 'proporcao', 'relacao', 'ocupacao', 'densidade'],
+  'área': ['area', 'espaco', 'superficie', 'metragem', 'tamanho', 'extensao', 'ati', 'area total de implantacao'],
+  'ati': ['ati', 'area total de implantacao', 'implantacao', 'ocupacao', 'coeficiente', 'indice'],
+  'coeficiente': ['coeficiente', 'indice', 'taxa', 'proporcao', 'relacao', 'ocupacao', 'densidade', 'ati'],
   'recuo': ['recuo', 'afastamento', 'distancia', 'margem', 'espaco'],
   'gabarito': ['gabarito', 'altura', 'limite', 'restricao', 'padrao', 'maximo'],
 
@@ -67,17 +70,17 @@ const SYNONYM_MAPPINGS: Record<string, string[]> = {
   'garagem': ['garagem', 'estacionamento', 'parqueamento', 'vaga'],
 
   // Acessibilidade
-  'acessibilidade': ['acessibilidade', 'acesso', 'inclusao', 'adaptacao', 'mobilidade'],
-  'acesso': ['acesso', 'entrada', 'saida', 'portao', 'porta', 'passagem'],
-  'rota': ['rota', 'caminho', 'percurso', 'trajetoria', 'passagem'],
-  'elevador': ['elevador', 'ascensor', 'plataforma', 'acessibilidade'],
-  'rampa': ['rampa', 'declividade', 'inclinacao', 'acesso', 'acessibilidade'],
+  'acessibilidade': ['acessibilidade', 'acesso', 'inclusao', 'adaptacao', 'mobilidade', 'universal', 'pne', 'deficientes'],
+  'acesso': ['acesso', 'entrada', 'saida', 'portao', 'porta', 'passagem', 'circulacao'],
+  'rota': ['rota', 'caminho', 'percurso', 'trajetoria', 'passagem', 'acessivel'],
+  'elevador': ['elevador', 'ascensor', 'plataforma', 'acessibilidade', 'vertical'],
+  'rampa': ['rampa', 'declividade', 'inclinacao', 'acesso', 'acessibilidade', 'pendente', 'patamar'],
 
   // Energia/instalações
-  'energia': ['energia', 'eletricidade', 'potencia', 'consumo', 'fornecimento'],
-  'água': ['agua', 'hidraulica', 'abastecimento', 'esgoto', 'fornecimento'],
-  'esgoto': ['esgoto', 'agua', 'drenagem', 'sanitario', 'coleta'],
-  'drenagem': ['drenagem', 'esgoto', 'escoamento', 'agua', 'infiltracao'],
+  'energia': ['energia', 'eletricidade', 'potencia', 'consumo', 'fornecimento', 'iturs', 'telecomunicacoes'],
+  'água': ['agua', 'hidraulica', 'abastecimento', 'esgoto', 'fornecimento', 'predial', 'pluvial'],
+  'esgoto': ['esgoto', 'agua', 'drenagem', 'sanitario', 'coleta', 'residual'],
+  'drenagem': ['drenagem', 'esgoto', 'escoamento', 'agua', 'infiltracao', 'vazao'],
   'gás': ['gas', 'gasoduto', 'combustivel', 'fornecimento'],
   'iluminação': ['iluminacao', 'luz', 'eletricidade', 'luminancia', 'intensidade'],
   'ventilação': ['ventilacao', 'ar', 'circulacao', 'fluxo', 'ambiente'],
