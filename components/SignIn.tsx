@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, LogIn } from 'lucide-react';
 import { GoogleIcon } from './ui/google-icon';
-import { loginAction, getGoogleOAuthUrlAction } from '@/app/actions/auth-actions';
+import { loginAction } from '@/app/actions/auth-actions';
 import { useSearchParams } from 'next/navigation';
 
 export default function SignIn({ onToggle, onClose }: { onToggle: () => void; onClose?: () => void }) {
@@ -31,7 +31,7 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
     setIsLoading(true);
     setError('');
     try {
-      const res = await getGoogleOAuthUrlAction();
+      const res = await fetch('/api/auth/google-url', { method: 'POST' }).then(r => r.json());
       if (!res.success || !res.url) {
         throw new Error(res.error || 'Não foi possível obter URL do Google OAuth.');
       }
