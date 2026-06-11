@@ -2,24 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   distDir: '.next',
-  // FIX: Configure Server Actions to allow multiple origins
-  experimental: {
-    serverActions: {
-      allowedOrigins: [
-        'localhost:3000',
-        '127.0.0.1:3000',
-        '127.0.0.1:54427',
-        'localhost',
-        '127.0.0.1',
-        '*.localhost',
-        'localhost:*',
-        '127.0.0.1:*',
-        'arquiv.org',
-        '*.arquiv.org',
-        '*.vercel.app',
-      ],
-    },
-  },
   // SEO: Rewrite rules for sitemap and robots
   async rewrites() {
     return [
