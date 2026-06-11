@@ -166,7 +166,7 @@ export default function TermsOfUse() {
             <a href="https://arquiv.org" className="text-zinc-800 underline underline-offset-2 hover:text-zinc-900" target="_blank" rel="noopener noreferrer">
               arquiv.org
             </a>{" "}
-            and all related media forms, channels, or applications (collectively, the "Site").
+            and all related media forms, channels, or applications (collectively, the &quot;Site&quot;).
           </p>
 
           <Warning>
@@ -219,7 +219,7 @@ export default function TermsOfUse() {
 
           <SectionHeading id="topups-credit-financial-policy" num={4}>TOP-UPS, CREDIT, AND FINANCIAL POLICY</SectionHeading>
           <p className="text-zinc-600 text-sm leading-relaxed mb-3">
-            The Site operates on a prepaid credit system via dynamic balances ("top-ups").
+            The Site operates on a prepaid credit system via dynamic balances (&quot;top-ups&quot;).
           </p>
           <ul className="space-y-2 mb-4">
             <Bullet label="Credit Expiration">Credits acquired through top-ups do not have an expiration date. They remain active and available on your account indefinitely until actively consumed by utilizing our AI-powered search services.</Bullet>

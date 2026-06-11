@@ -133,7 +133,7 @@ export default function PrivacyPolicy() {
 
           {/* Intro */}
           <p className="text-zinc-600 leading-relaxed mb-2">
-            This Privacy Notice for <strong className="text-zinc-800">SaaSarc</strong> ("we," "us," "our") describes how and why we might access, collect, store, use, and/or share ("process") your personal information when you use our Services, including when you visit{" "}
+            This Privacy Notice for <strong className="text-zinc-800">SaaSarc</strong> (&quot;we,&quot; &quot;us,&quot; &quot;our&quot;) describes how and why we might access, collect, store, use, and/or share (&quot;process&quot;) your personal information when you use our Services, including when you visit{" "}
             <a href="https://arquiv.org" className="text-zinc-800 underline underline-offset-2 hover:text-zinc-900" target="_blank" rel="noopener noreferrer">arquiv.org</a>.
           </p>
           <Note>
@@ -222,7 +222,7 @@ export default function PrivacyPolicy() {
           <p className="text-zinc-600 text-sm leading-relaxed mb-4">Regardless of where you reside globally, we respect your privacy rights and provide the ability to request access, rectification, or absolute erasure of your personal data. If you are located in the EEA, UK, or other jurisdictions with comprehensive privacy frameworks (like GDPR), you possess specific legal rights which we honor through our global deletion and data access policies.</p>
 
           <SectionHeading id="do-not-track" num={11}>CONTROLS FOR DO-NOT-TRACK FEATURES</SectionHeading>
-          <p className="text-zinc-600 text-sm leading-relaxed mb-4">Most web browsers include a Do‑Not‑Track ("DNT") feature you can activate to signal your privacy preference. No uniform technology standard for recognizing and implementing DNT signals has been finalized. As such, we do not currently respond to DNT browser signals.</p>
+          <p className="text-zinc-600 text-sm leading-relaxed mb-4">Most web browsers include a Do&#8209;Not&#8209;Track (&quot;DNT&quot;) feature you can activate to signal your privacy preference. No uniform technology standard for recognizing and implementing DNT signals has been finalized. As such, we do not currently respond to DNT browser signals.</p>
 
           <SectionHeading id="us-residents" num={12}>DO UNITED STATES RESIDENTS HAVE SPECIFIC PRIVACY RIGHTS?</SectionHeading>
           <p className="text-zinc-600 text-sm leading-relaxed mb-4">Yes. If you are a resident of states with comprehensive privacy laws (such as California, Virginia, Colorado, Connecticut, or Utah), you are granted specific rights regarding your personal information. We ensure compliance by not selling your personal data, not sharing it for cross‑context behavioral advertising, and allowing you to request immediate deletion by contacting us directly.</p>
@@ -231,7 +231,7 @@ export default function PrivacyPolicy() {
           <p className="text-zinc-600 text-sm leading-relaxed mb-4">Yes. Users from other regions, including African nations (such as Mozambique under local electronic transactions and data protection frameworks), are guaranteed that their electronic data is processed transparently, securely, and solely for the execution of the architectural search services contracted on our platform.</p>
 
           <SectionHeading id="updates-to-notice" num={14}>DO WE MAKE UPDATES TO THIS NOTICE?</SectionHeading>
-          <p className="text-zinc-600 text-sm leading-relaxed mb-4">We may update this Privacy Notice from time to time. The updated version will be indicated by an updated "Revised" date and will be effective as soon as it is accessible. We encourage you to review this Privacy Notice frequently to stay informed.</p>
+          <p className="text-zinc-600 text-sm leading-relaxed mb-4">We may update this Privacy Notice from time to time. The updated version will be indicated by an updated &quot;Revised&quot; date and will be effective as soon as it is accessible. We encourage you to review this Privacy Notice frequently to stay informed.</p>
 
           <SectionHeading id="contact-us" num={15}>HOW CAN YOU CONTACT US ABOUT THIS NOTICE?</SectionHeading>
           <p className="text-zinc-600 text-sm leading-relaxed mb-4">
