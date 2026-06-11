@@ -1,61 +1,21 @@
-import './globals.css';
+"use client";
+
+import { useState, useEffect } from 'react';
+import { MessageSquare } from 'lucide-react';
+import { Demo as Footer } from '@/components/footer-demo';
+import AIChatCard from '@/components/ui/ai-chat';
+import { getSessionAction } from '@/app/actions/auth-actions';
+
+// Essential imports for the layout
 import { Inter } from 'next/font/google';
 import localFont from 'next/font/local';
-import type { Metadata } from 'next';
-import LayoutClient from '@/components/LayoutClient';
+import { Toaster } from 'sonner';
+import './globals.css';
+import AdScript from '@/components/AdScript';
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
+import { cn } from "@/lib/utils";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://arquiv.org';
-
-export const metadata: Metadata = {
-  metadataBase: new URL(appUrl),
-  title: {
-    default: 'Arquiv - Normas Técnicas de Construção e Legislação',
-    template: '%s | Arquiv',
-  },
-  description: 'Pesquise normas técnicas de construção, regulamentos, legislação de arquitetura e engenharia por país. Acesso rápido a decretos, leis, portarias e normas ABNT, ISO, Eurocódigo.',
-  keywords: [
-    'normas técnicas', 'regulamentos construção', 'legislação arquitetura', 
-    'decretos', 'leis construção', 'normas país', 'engenharia civil',
-    'normas ABNT', 'Eurocódigo', 'ISO', 'desenho técnico', 'segurança obra',
-    'acessibilidade', 'incêndio', 'instalações elétricas', 'hidráulicas',
-    'Portugal', 'Brasil', 'Angola', 'Moçambique', 'urbanismo', 'licenciamento'
-  ],
-  authors: [{ name: 'Arquiv' }],
-  creator: 'Arquiv',
-  publisher: 'Arquiv',
-  category: 'Architecture & Engineering',
-  applicationName: 'Arquiv',
-  referrer: 'origin-when-cross-origin',
-  robots: { index: true, follow: true },
-  openGraph: {
-    type: 'website',
-    locale: 'pt_BR',
-    url: appUrl,
-    siteName: 'Arquiv',
-    title: 'Arquiv - Normas Técnicas de Construção e Legislação',
-    description: 'Pesquise normas técnicas, regulamentos e legislação de construção por país.',
-    images: [{ url: '/icons/icon-nopadding.png', width: 512, height: 512, alt: 'Arquiv' }],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Arquiv - Normas Técnicas de Construção',
-    description: 'Pesquise normas técnicas, regulamentos e legislação de construção por país.',
-    images: ['/icons/icon-nopadding.png'],
-  },
-  icons: {
-    icon: [
-      { url: '/icons/icon-nopadding.png', sizes: '512x512', type: 'image/png' },
-      { url: '/icons/icon.png', sizes: '32x32', type: 'image/png' },
-    ],
-    shortcut: '/icons/icon-nopadding.png',
-    apple: [
-      { url: '/icons/icon-nopadding.png', sizes: '180x180', type: 'image/png' },
-    ],
-  },
-  manifest: '/manifest.json',
-};
-
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+const inter = Inter({subsets:['latin'],variable:'--font-sans',display:'swap'});
 
 const equinox = localFont({
   src: [
@@ -75,12 +35,57 @@ const equinox = localFont({
 });
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const res = await getSessionAction();
+        if (res.success && res.isAdmin) {
+          setIsAdmin(true);
+        }
+      } catch (err) {
+        console.error('Session check error:', err);
+      } finally {
+        setIsSessionLoading(false);
+      }
+    };
+
+    checkSession();
+  }, []);
+
   return (
-    <html lang="pt" suppressHydrationWarning className={`${equinox.variable} font-sans ${inter.variable}`}>
+    <html lang="pt" suppressHydrationWarning className={cn(equinox.variable, "font-sans", inter.variable)}>
       <head>
+        <title>Arquiv - Normas Técnicas de Construção e Legislação</title>
+        <link rel="icon" href="/icons/icon-nopadding.png" sizes="512x512" />
+        <link rel="icon" href="/icons/icon.png" sizes="32x32" />
+        <link rel="shortcut icon" href="/icons/icon-nopadding.png" />
+        <link rel="apple-touch-icon" href="/icons/icon-nopadding.png" sizes="180x180" />
+        <meta name="theme-color" content="#1e40af" />
       </head>
       <body suppressHydrationWarning className="font-sans antialiased">
-        <LayoutClient>{children}</LayoutClient>
+        {children}
+        <Footer />
+        <Toaster position="top-center" richColors />
+        <AdScript />
+        <ServiceWorkerRegister />
+        {!isSessionLoading && isAdmin && isChatOpen && (
+          <div className="fixed bottom-4 right-4 z-50">
+            <AIChatCard />
+          </div>
+        )}
+        {!isSessionLoading && isAdmin && (
+          <button
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            className="fixed bottom-20 right-4 z-50 p-3 rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600 transition-colors"
+            aria-label="Toggle AI Chat"
+          >
+            <MessageSquare size={24} />
+          </button>
+        )}
       </body>
     </html>
   );
