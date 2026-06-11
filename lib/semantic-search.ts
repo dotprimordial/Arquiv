@@ -22,7 +22,7 @@ export class EmbeddingClient {
           'X-Title': 'Arquiv - Semantic Search',
         },
         body: JSON.stringify({
-          model: 'text-embedding-3-small',
+          model: 'nvidia/llama-nemotron-embed-vl-1b-v2:free',
           input: text.substring(0, 8000),
         }),
       });
@@ -99,7 +99,7 @@ Responda APENAS em JSON válido no formato:
   try {
     const response = await openRouter.chatCompletion(
       messages,
-      'anthropic/claude-3.5-haiku',
+      'google/gemma-4-31b-it:free',
       0.3,
       { type: 'json_object' }
     );
@@ -388,7 +388,7 @@ ${section.content}
   try {
     const response = await openRouter.chatCompletion(
       messages,
-      'anthropic/claude-3.5-haiku',
+      'google/gemma-4-31b-it:free',
       0.3
     );
 

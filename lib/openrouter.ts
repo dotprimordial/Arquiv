@@ -28,9 +28,10 @@ export class OpenRouterClient {
 
   async chatCompletion(
     messages: OpenRouterMessage[],
-    model: string = 'anthropic/claude-3.5-haiku',
+    model: string = 'google/gemma-4-31b-it:free',
     temperature: number = 0.7,
-    responseFormat?: { type: 'json_object' }
+    responseFormat?: { type: 'json_object' },
+    maxTokens: number = 1024
   ): Promise<OpenRouterResponse> {
     // Add 10 second timeout to prevent long waits
     const controller = new AbortController();
@@ -50,6 +51,7 @@ export class OpenRouterClient {
           messages,
           temperature,
           response_format: responseFormat,
+          max_tokens: maxTokens,
         }),
         signal: controller.signal,
       });

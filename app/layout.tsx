@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { Demo as Footer } from '@/components/footer-demo';
 import AIChatCard from '@/components/ui/ai-chat';
+import { getSessionAction } from '@/app/actions/auth-actions';
 
 // Essential imports for the layout
 import { Inter } from 'next/font/google';
@@ -38,6 +39,25 @@ const equinox = localFont({
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const res = await getSessionAction();
+        if (res.success && res.isAdmin) {
+          setIsAdmin(true);
+        }
+      } catch (err) {
+        console.error('Session check error:', err);
+      } finally {
+        setIsSessionLoading(false);
+      }
+    };
+
+    checkSession();
+  }, []);
 
   return (
     <html lang="pt" suppressHydrationWarning className={cn(equinox.variable, "font-sans", inter.variable)}>
@@ -49,18 +69,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Toaster position="top-center" richColors />
         <AdScript />
         <ServiceWorkerRegister />
-        {isChatOpen && (
+        {!isSessionLoading && isAdmin && isChatOpen && (
           <div className="fixed bottom-4 right-4 z-50">
             <AIChatCard />
           </div>
         )}
-        <button
-          onClick={() => setIsChatOpen(!isChatOpen)}
-          className="fixed bottom-20 right-4 z-50 p-3 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-colors"
-          aria-label="Toggle AI Chat"
-        >
-          <MessageSquare size={24} />
-        </button>
+        {!isSessionLoading && isAdmin && (
+          <button
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            className="fixed bottom-20 right-4 z-50 p-3 rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600 transition-colors"
+            aria-label="Toggle AI Chat"
+          >
+            <MessageSquare size={24} />
+          </button>
+        )}
       </body>
     </html>
   );

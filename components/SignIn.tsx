@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, LogIn, Globe } from 'lucide-react';
+import { Mail, Lock, LogIn } from 'lucide-react';
+import { GoogleIcon } from './ui/google-icon';
 import { loginAction, getGoogleOAuthUrlAction } from '@/app/actions/auth-actions';
 import { useSearchParams } from 'next/navigation';
 
@@ -181,7 +182,7 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
         disabled={isLoading}
         className="w-full py-4 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-zinc-50 transition-all"
       >
-        <Globe className="w-5 h-5" />
+        <GoogleIcon className="w-5 h-5" />
         Google
       </button>
 

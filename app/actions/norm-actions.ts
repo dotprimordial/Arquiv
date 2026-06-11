@@ -82,7 +82,7 @@ Responda APENAS com JSON válido, sem markdown:
 
     const messages: OpenRouterMessage[] = [{ role: "user", content: prompt + "\n\nDOCUMENTO:\n" + content.substring(0, 12000) }];
 
-    const response = await openRouter.chatCompletion(messages, "anthropic/claude-3.5-haiku", 0.3, {
+    const response = await openRouter.chatCompletion(messages, "google/gemma-4-31b-it:free", 0.3, {
       type: "json_object",
     });
 
@@ -282,7 +282,7 @@ INSTRUÇÕES:
             'HTTP-Referer': 'https://arquiv.org',
           },
           body: JSON.stringify({
-            model: 'anthropic/claude-3.5-haiku',
+            model: 'google/gemma-4-31b-it:free',
             messages: [{ role: 'user', content: summaryPrompt }],
             temperature: 0.3,
           }),
@@ -670,7 +670,7 @@ function adjustSnippetBoundaries(clean: string, start: number, end: number, maxE
 }
 
 // Extract a concise snippet around the query terms from a larger content string
-function extractBestSnippet(content: string, query: string, maxLen: number = 400): string {
+function extractBestSnippet(content: string, query: string, maxLen: number = 600): string {
     const clean = cleanHtmlFormatting(content || '');
     if (!clean) return '';
 
@@ -717,37 +717,56 @@ function extractBestSnippet(content: string, query: string, maxLen: number = 400
     // Normalize content for matching
     const normalizedClean = removeAccents(clean);
 
-    // Find earliest occurrence of any term (expanded or original)
-    let idx = -1;
-    let matchedTerm = '';
+    // Find ALL term occurrences and select the window with the most matches (best coverage)
+    const matchPositions: number[] = [];
     for (const term of allTerms) {
-      const i = normalizedClean.indexOf(term);
-      if (i !== -1 && (idx === -1 || i < idx)) {
-        idx = i;
-        matchedTerm = term;
+      let searchFrom = 0;
+      while (searchFrom < normalizedClean.length) {
+        const i = normalizedClean.indexOf(term, searchFrom);
+        if (i === -1) break;
+        matchPositions.push(i);
+        searchFrom = i + term.length;
       }
     }
 
-    // If not found, return empty to signal "no match" - don't return start of document
-    if (idx === -1) {
+    // If not found, return empty
+    if (matchPositions.length === 0) {
       console.log('[extractBestSnippet] No match found for terms:', allTerms.slice(0, 5));
       return '';
     }
 
-    console.log('[extractBestSnippet] Found term:', matchedTerm, 'at index:', idx, 'in content of length:', clean.length);
+    // Find the best window (max matches in a maxLen range)
+    let bestStart = 0;
+    let bestEnd = Math.min(clean.length, maxLen);
+    let maxMatches = 0;
 
-    // Center snippet around found index
-    const half = Math.floor(maxLen / 2);
-    let start = Math.max(0, idx - half);
-    let end = Math.min(clean.length, start + maxLen);
+    for (let i = 0; i < matchPositions.length; i++) {
+      const pos = matchPositions[i];
+      const windowStart = Math.max(0, pos - Math.floor(maxLen / 2));
+      const windowEnd = Math.min(clean.length, windowStart + maxLen);
 
-    const bounds = adjustSnippetBoundaries(clean, start, end, 200);
-    start = bounds.start;
-    end = bounds.end;
+      // Count matches in this window
+      let matches = 0;
+      for (let j = i; j < matchPositions.length; j++) {
+        if (matchPositions[j] < windowEnd) matches++;
+        else break;
+      }
 
-    let snippet = clean.substring(start, end).trim();
-    if (start > 0) snippet = '...' + snippet;
-    if (end < clean.length) snippet = snippet + '...';
+      if (matches > maxMatches) {
+        maxMatches = matches;
+        bestStart = windowStart;
+        bestEnd = windowEnd;
+      }
+    }
+
+    // Adjust to sentence boundaries
+    const bounds = adjustSnippetBoundaries(clean, bestStart, bestEnd, 300);
+    bestStart = bounds.start;
+    bestEnd = bounds.end;
+
+    let snippet = clean.substring(bestStart, bestEnd).trim();
+    if (bestStart > 0) snippet = '...' + snippet;
+    if (bestEnd < clean.length) snippet = snippet + '...';
     return snippet;
   }
 
@@ -1083,9 +1102,13 @@ export async function searchNormsSemantic(
     const supabase = await getAuthenticatedSupabaseClient();
     const cleaned = cleanHtmlFormatting(query);
 
-    // Generate query embedding
-    const embeddingClient = new EmbeddingClient(apiKey);
-    const queryEmbedding = await embeddingClient.generateEmbedding(cleaned);
+    // Generate query embedding with interpretation context for better semantic understanding
+      const embeddingClient = new EmbeddingClient(apiKey);
+      let queryTextForEmbedding = cleaned;
+      if (queryInterpretation.aiAnalysis && queryInterpretation.concepts?.length > 0) {
+        queryTextForEmbedding = `Pesquisa: ${cleaned}\nConceitos: ${queryInterpretation.concepts.join(', ')}\nAnálise: ${queryInterpretation.aiAnalysis}`;
+      }
+      const queryEmbedding = await embeddingClient.generateEmbedding(queryTextForEmbedding);
 
     // Fetch sections with embeddings from the database
     let allowedNormIds: string[] | null = null;
@@ -1173,9 +1196,30 @@ export async function searchNormsSemantic(
         .map((s) => {
           const emb = parseEmbedding(s.embedding);
           if (!emb) return null;
-          return { section: s, similarity: cosineSim(emb, queryEmbedding) };
+
+          // Calculate semantic similarity
+          const similarity = cosineSim(emb, queryEmbedding);
+
+          // Calculate keyword matching score for hybrid ranking
+          const sectionText = cleanHtmlFormatting(String(s.content || '') + ' ' + String(s.section_title || ''));
+          const normalizedSectionText = removeAccents(sectionText);
+          let keywordMatches = 0;
+          const foundKeywords = new Set<string>();
+
+          for (const term of normalizedSearchTokens) {
+            if (normalizedSectionText.includes(term) && !foundKeywords.has(term)) {
+              foundKeywords.add(term);
+              // Weight longer keywords more heavily
+              keywordMatches += term.length >= 6 ? 0.15 : 0.08;
+            }
+          }
+
+          // Combine scores: semantic (70% weight) + keyword (30% weight)
+          const finalScore = (similarity * 0.7) + (Math.min(keywordMatches, 0.4) * 0.3);
+
+          return { section: s, similarity: finalScore, rawSimilarity: similarity, keywordScore: keywordMatches };
         })
-        .filter((r): r is NonNullable<typeof r> => r !== null && r.similarity >= 0.4)
+        .filter((r): r is NonNullable<typeof r> => r !== null && r.rawSimilarity >= 0.4)
         .filter(({ section }) => {
           const sectionText = cleanHtmlFormatting(String(section.content || '') + ' ' + String(section.section_title || ''));
           const normalizedSectionText = removeAccents(sectionText);
@@ -1885,8 +1929,9 @@ async function postProcessSearchResults(
 
   console.log(`[postProcessSearchResults] Extracting answers for query "${query}" (intent: ${intent})`);
 
-  const topResults = results.slice(0, 3);
-  const remainingResults = results.slice(3);
+  // Extract answers from top 10 results to ensure we don't miss any great matches
+  const topResults = results.slice(0, 10);
+  const remainingResults = results.slice(10);
 
   const processedTop = await Promise.all(
     topResults.map(async (res) => {
@@ -1905,21 +1950,125 @@ async function postProcessSearchResults(
     fullArticleContent: res.fullArticleContent || res.content
   }))];
 
-  const ranked = allProcessed
+  // Strong heuristic ranking prioritizing direct answers
+  const rankedHeuristic = allProcessed
     .map((res) => {
       let score = res.similarity;
+      
+      // MAJOR boost for results that have a direct extracted answer!
       if (res.extractedAnswer) {
-        score += 0.3;
-        if (/\d+/.test(res.extractedAnswer)) {
+        score += 0.6; // Big boost!
+        if (/\d+/.test(res.extractedAnswer)) { // Extra boost for numerical limits/values (super relevant for norms)
+          score += 0.2;
+        }
+        // Check if answer mentions units (m, m², %, km/h etc.) which are typical for norm requirements
+        if (/\b(m|m²|m³|%|km\/h|kg|ton|cm|mm)\b/.test(res.extractedAnswer)) {
           score += 0.1;
         }
       }
+      
       return { res, score };
     })
     .sort((a, b) => b.score - a.score)
     .map(({ res }) => res);
 
-  return ranked;
+  // Final AI Re-ranking, with an improved prompt focused on direct answers
+  try {
+    if (apiKey && apiKey.length > 10 && rankedHeuristic.length > 1) {
+      console.log(`[postProcessSearchResults] Performing AI re-ranking for top ${Math.min(10, rankedHeuristic.length)} results...`);
+      return await rankResultsWithAI(rankedHeuristic, query, apiKey);
+    }
+  } catch (err) {
+    console.warn('[postProcessSearchResults] AI re-ranking failed, using heuristic order:', err);
+  }
+
+  return rankedHeuristic;
+}
+
+/**
+ * Uses AI to re-rank the top search results based on semantic relevance to the user's query.
+ */
+async function rankResultsWithAI(
+  results: SearchResult[],
+  query: string,
+  apiKey: string
+): Promise<SearchResult[]> {
+  if (results.length <= 1 || !apiKey) return results;
+
+  // We only re-rank the top 10 results to keep it fast and focused
+  const candidates = results.slice(0, 10);
+  const remaining = results.slice(10);
+
+  try {
+    const openRouter = new OpenRouterClient(apiKey);
+    
+    const formattedCandidates = candidates.map((r, i) => ({
+      index: i,
+      id: r.sectionId,
+      norm: `${r.normCode} - ${r.normTitle}`,
+      content: r.content.substring(0, 500), // Give enough context for ranking
+      hasExtractedAnswer: !!r.extractedAnswer,
+      extractedAnswer: r.extractedAnswer // Include the extracted answer in the prompt!
+    }));
+
+    const prompt = `Você é um especialista jurídico e arquitetônico. Sua tarefa é reordenar os trechos de normas abaixo por ordem de relevância direta para a pesquisa do usuário.
+
+PESQUISA DO USUÁRIO: "${query}"
+
+TRECHOS CANDIDATOS:
+${JSON.stringify(formattedCandidates, null, 2)}
+
+INSTRUÇÕES CRÍTICAS:
+1. COLOQUE EM PRIMEIRO LUGAR OS TRECHOS QUE TÊM RESPOSTA DIRETA (campo "extractedAnswer" não vazio)! Esses são os mais relevantes!
+2. Dentro dos trechos com resposta direta, priorize respostas que incluem valores numéricos, limites, unidades de medida (m, m², %, cm, etc.).
+3. Avalie quão bem cada trecho responde diretamente à pergunta ou necessidade do usuário.
+4. Priorize trechos que contenham regras claras ou definições específicas solicitadas.
+5. Ignore trechos puramente administrativos se a pergunta for técnica.
+6. Retorne APENAS um array JSON com os IDs (sectionId) na ordem decrescente de relevância.
+
+EXEMPLO DE RESPOSTA:
+["id-5", "id-2", "id-8", ...]`;
+
+    const messages: OpenRouterMessage[] = [{ role: 'user', content: prompt }];
+    
+    const response = await openRouter.chatCompletion(
+      messages,
+      'anthropic/claude-3.5-haiku',
+      0.1, // Low temperature for deterministic ranking
+      { type: 'json_object' }
+    );
+
+    const rawContent = response.choices[0]?.message?.content || '[]';
+    const rankedIds = JSON.parse(extractJSON(rawContent));
+
+    if (Array.isArray(rankedIds) && rankedIds.length > 0) {
+      const rankedResults: SearchResult[] = [];
+      const foundIds = new Set<string>();
+
+      // Add ranked results in order
+      for (const id of rankedIds) {
+        const match = candidates.find(c => c.sectionId === id);
+        if (match && !foundIds.has(id)) {
+          rankedResults.push(match);
+          foundIds.add(id);
+        }
+      }
+
+      // Add any candidates that the AI might have missed
+      for (const c of candidates) {
+        if (!foundIds.has(c.sectionId)) {
+          rankedResults.push(c);
+        }
+      }
+
+      console.log(`[rankResultsWithAI] Successfully re-ranked ${rankedResults.length} candidates`);
+      return [...rankedResults, ...remaining];
+    }
+  } catch (error) {
+    console.error('[rankResultsWithAI] Error during AI re-ranking:', error);
+  }
+
+  return results;
 }
 
 // Fallback textual search function

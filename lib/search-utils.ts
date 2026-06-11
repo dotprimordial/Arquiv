@@ -392,7 +392,7 @@ export async function interpretUserQuery(query: string, apiKey: string): Promise
   try {
     const response = await openRouter.chatCompletion(
       messages,
-      'anthropic/claude-3.5-haiku',
+      'google/gemma-4-31b-it:free',
       0.3,
       { type: 'json_object' }
     );

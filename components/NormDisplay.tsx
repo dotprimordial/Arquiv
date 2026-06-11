@@ -9,6 +9,7 @@ import { Trash2, Edit2 } from 'lucide-react';
 import { Norm } from '@/lib/gemini';
 import { generateNormSummaryServer } from '@/app/actions/norm-actions';
 import { toast } from 'sonner';
+import { SearchLoading } from './ui/search-loading';
 
 interface NormDisplayProps {
   norms: (Norm & { reasoning?: string; excerpt?: string })[] | null;
@@ -20,6 +21,7 @@ interface NormDisplayProps {
   onUpdate?: (id: string, updates: Partial<Norm>) => void;
   hasSearchQuery?: boolean; // Nova prop para indicar se houve pesquisa
   isAdmin?: boolean; // Admin pode editar/deletar qualquer norma
+  currentStep?: number;
 }
 
 function NormDisplay({
@@ -31,7 +33,8 @@ function NormDisplay({
   onDelete,
   onUpdate,
   hasSearchQuery = false, // Default: sem pesquisa
-  isAdmin = false // Default: não é admin
+  isAdmin = false, // Default: não é admin
+  currentStep = 0,
 }: NormDisplayProps) {
   console.log('[NormDisplay] isAdmin:', isAdmin);
   const [expandedNorms, setExpandedNorms] = useState<Set<string>>(new Set());
@@ -62,12 +65,7 @@ function NormDisplay({
     });
   };
   if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-zinc-400">
-        <Loader2 className="w-10 h-10 animate-spin mb-4" />
-        <p className="text-sm font-medium animate-pulse">Consultando normas técnicas...</p>
-      </div>
-    );
+    return <SearchLoading currentStep={currentStep} />;
   }
 
   if (error) {

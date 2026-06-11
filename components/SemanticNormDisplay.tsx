@@ -15,6 +15,7 @@ import { SearchResult, generateNormSummaryServer } from '@/app/actions/norm-acti
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { SearchLoading } from './ui/search-loading';
 
 interface GroupedSearchResult {
   normId: string;
@@ -32,6 +33,7 @@ interface SemanticNormDisplayProps {
   countryCode: string;
   hasSearchQuery: boolean;
   isAdmin?: boolean;
+  currentStep?: number;
 }
 
 function SemanticNormDisplay({
@@ -42,6 +44,7 @@ function SemanticNormDisplay({
   countryCode,
   hasSearchQuery,
   isAdmin = false,
+  currentStep = 0,
 }: SemanticNormDisplayProps) {
   console.log('[SemanticNormDisplay] isAdmin:', isAdmin);
   const [expandedNorms, setExpandedNorms] = useState<Set<string>>(new Set());
@@ -125,12 +128,7 @@ function SemanticNormDisplay({
   }, [results]);
 
   if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-zinc-500">
-        <Loader2 className="w-12 h-12 mb-4 animate-spin" />
-        <p className="text-sm font-medium">Buscando normas relevantes...</p>
-      </div>
-    );
+    return <SearchLoading currentStep={currentStep} />;
   }
 
   if (error) {
