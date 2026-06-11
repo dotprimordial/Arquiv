@@ -27,6 +27,8 @@ const MAX_CONTENT_LENGTH = 5 * 1024 * 1024;
 
 
 export default function UploadPage() {
+  useEffect(() => { document.title = 'Carregar Norma | Arquiv'; }, []);
+
   const [normDecree, setNormDecree] = useState('');
   const [normName, setNormName] = useState('');
   const [country, setCountry] = useState('Portugal');

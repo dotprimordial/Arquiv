@@ -86,6 +86,7 @@ export default function TermsOfUse() {
   const [activeId, setActiveId] = useState<string>("");
 
   useEffect(() => {
+    document.title = 'Terms of Use | Arquiv';
     const handleScroll = () => {
       let current = "";
       for (const s of sections) {

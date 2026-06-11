@@ -11,6 +11,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    document.title = 'Entrar | Arquiv';
     const signupParam = searchParams.get('signup');
     if (signupParam === 'success') {
       setIsLogin(true);

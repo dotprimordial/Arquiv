@@ -63,6 +63,7 @@ export default function Home() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
 
   useEffect(() => {
+    document.title = 'Arquiv - Normas Técnicas de Construção e Legislação';
     // Log visitor IP address on first page load (non-blocking)
     fetch('/api/log-ip', { method: 'POST' }).catch((err) => console.error('IP log error:', err));
   }, []);
