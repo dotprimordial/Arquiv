@@ -33,7 +33,6 @@ function SectionHeading({ id, num, children }: { id: string; num: number; childr
     <h2
       id={id}
       className="group flex items-baseline gap-3 text-lg font-semibold tracking-tight text-zinc-900 mt-14 mb-4 pb-3 border-b border-zinc-100 scroll-mt-28"
-      style={{ fontFamily: "var(--font-equinox, var(--font-sans))" }}
     >
       <span className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full bg-zinc-900 text-white text-xs font-bold">
         {num}
@@ -108,7 +107,6 @@ export default function TermsOfUse() {
             <p className="text-xs font-semibold tracking-widest text-zinc-400 uppercase mb-3">Legal</p>
             <h1
               className="text-4xl md:text-5xl font-bold text-zinc-900 tracking-tight leading-tight mb-4"
-              style={{ fontFamily: "var(--font-equinox, var(--font-sans))" }}
             >
               Terms of Use
             </h1>
