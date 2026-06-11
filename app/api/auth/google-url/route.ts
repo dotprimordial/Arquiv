@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
 import { getAuthRedirectUrl } from '@/lib/auth-utils';
 
+export const runtime = 'edge';
+
 export async function POST() {
   try {
     const supabase = await getAuthenticatedSupabaseClient();
