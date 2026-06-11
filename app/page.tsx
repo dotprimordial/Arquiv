@@ -14,7 +14,6 @@ import { getSessionAction, logoutAction } from '@/app/actions/auth-actions';
 import { useRouter } from 'next/navigation';
 import { searchNormsSemantic, SearchResult, deleteNormServer } from '@/app/actions/norm-actions';
 import { toast } from 'sonner';
-import { SearchLoading } from '@/components/ui/search-loading';
 
 // Lazy load heavy components
 import dynamic from 'next/dynamic';

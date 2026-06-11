@@ -969,6 +969,16 @@ function findHierarchyBeforeExcerpt(excerpt: string, fullText: string, contextSi
   out.alinea = findLastMatch(/(?:Al[íi]nea|AL[ÍI]NEA|ALINEA)\s+[a-z](?:\)|$|\s)/gi);
   out.item = findLastMatch(/(?:Item|ITEM)\s+\d+/gi);
 
+  // If the excerpt itself starts with an article/paragraph header, use that instead of the one found in contextBefore
+  const excerptArticleMatch = ex.match(/^\s*(?:Art(?:igo)?\.?\s*(?:nº|n°)?\s*\d+(?:º|ª)?(?:\s*-\s*[A-Za-z\u00C0-\u00FF])?)/i);
+  if (excerptArticleMatch) {
+    out.artigo = excerptArticleMatch[0].trim();
+  }
+  const excerptParaMatch = ex.match(/^\s*(§\s*(?:\d+(?:º|ª)?|úni[cç]o[as]?))/i);
+  if (excerptParaMatch) {
+    out.paragrafo = excerptParaMatch[0].trim();
+  }
+
   void contextSize;
   return out;
 }
@@ -1907,7 +1917,7 @@ INSTRUÇÕES:
 
     const answer = response.choices[0]?.message?.content?.trim() || '';
     
-    if (!answer || answer.toUpperCase() === 'N/A' || answer.toLowerCase().includes('não cont') || answer.toLowerCase().includes('não há') || answer.toLowerCase().includes('não menciona')) {
+    if (!answer || answer.toUpperCase().startsWith('N/A') || answer.toUpperCase().trim() === 'N/A' || NEGATIVE_ANSWER_PATTERNS.some(p => p.test(answer))) {
       setCachedSearch(cacheKey, null, 1800); // cache negative results for 30 minutes
       return null;
     }
@@ -1919,6 +1929,18 @@ INSTRUÇÕES:
     return null;
   }
 }
+
+const NEGATIVE_ANSWER_PATTERNS = [
+  /n[aã]o\s+especifica/i, /n[aã]o\s+define/i, /n[aã]o\s+menciona/i,
+  /n[aã]o\s+indica/i, /n[aã]o\s+estabelece/i, /n[aã]o\s+cont[eé]m/i,
+  /n[aã]o\s+fornece/i, /n[aã]o\s+apresenta/i, /n[aã]o\s+h[aá]/i,
+  /n[aã]o\s+(cont[eé]m|traz|d[aá])/i, /n\s*\/\s*a/i, /n\.\s*a/i,
+  /sem\s+(informa[cç][aã]o|men[cç][aã]o|especifica[cç][aã]o|indica[cç][aã]o|refer[aê]ncia)/i,
+  /cabe\s+ao\s+(plano|regulamento|munic[ií]pio|concelho)/i,
+  /compete\s+ao\s+(plano|regulamento|munic[ií]pio|concelho)/i,
+  /ser[aá]\s+definido/i, /ser[aã]o\s+definidos/i,
+  /a\s+definir/i, /a\s+estabelecer/i, /remete\s+para/i,
+];
 
 async function postProcessSearchResults(
   results: SearchResult[],
@@ -1945,7 +1967,17 @@ async function postProcessSearchResults(
     })
   );
 
-  const allProcessed = [...processedTop, ...remainingResults.map(res => ({
+  // Filter out results where the extracted answer says "não especifica", "N/A", etc.
+  const filteredProcessedTop = processedTop.filter((res) => {
+    if (!res.extractedAnswer) return true;
+    const answerLower = res.extractedAnswer.toLowerCase();
+    return !NEGATIVE_ANSWER_PATTERNS.some((p) => p.test(answerLower));
+  });
+  if (filteredProcessedTop.length < processedTop.length) {
+    console.log(`[postProcessSearchResults] Filtered out ${processedTop.length - filteredProcessedTop.length} results with non-direct answers`);
+  }
+
+  const allProcessed = [...filteredProcessedTop, ...remainingResults.map(res => ({
     ...res,
     fullArticleContent: res.fullArticleContent || res.content
   }))];
