@@ -1,21 +1,23 @@
-import { NextResponse } from 'next/server';
-import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { createEdgeSupabaseClient } from '@/lib/supabase-server';
 
 export const runtime = 'edge';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  
+
   if (code) {
     try {
-      const supabase = await getAuthenticatedSupabaseClient();
+      const response = NextResponse.redirect(`${origin}/`);
+      const supabase = createEdgeSupabaseClient(request, response);
+
       const { error } = await supabase.auth.exchangeCodeForSession(code);
-      
+
       if (!error) {
-        return NextResponse.redirect(`${origin}/`);
+        return response;
       }
-      
+
       console.error('[Auth Callback] Exchange error:', error.message);
       return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(error.message)}`);
     } catch (err) {

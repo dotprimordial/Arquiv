@@ -1,5 +1,6 @@
 import { Hexagon } from "lucide-react"
 import { Footer } from "@/components/ui/footer"
+import { toast } from "sonner"
 
 function Demo() {
   return (
@@ -9,7 +10,7 @@ function Demo() {
         brandName="SaaSarc"
         socialLinks={[]}
         mainLinks={[
-          { href: "/top-up", label: "Recargas" },
+          { label: "Recargas", onClick: () => toast.info("Brevemente") },
           { href: "/about", label: "Sobre" },
           { href: "/contact", label: "Contacto" },
         ]}

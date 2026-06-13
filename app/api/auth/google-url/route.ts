@@ -1,24 +1,17 @@
-import { NextResponse } from 'next/server';
-import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { createEdgeSupabaseClient } from '@/lib/supabase-server';
 
 export const runtime = 'edge';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await getAuthenticatedSupabaseClient();
-
-    // Use the Host header from the request to build the correct redirect URL,
-    // avoiding localhost fallback when NEXT_PUBLIC_APP_URL is unset on Cloudflare.
-    const origin = request.headers.get('Origin') || request.headers.get('Host') || '';
-    const baseUrl = origin
-      ? `${origin.startsWith('http') ? '' : 'https://'}${origin.replace(/\/+$/, '')}`
-      : process.env.NEXT_PUBLIC_APP_URL || 'https://arquiv.org';
-    const redirectTo = `${baseUrl.replace(/\/+$/, '')}/auth/callback`;
+    const supabase = createEdgeSupabaseClient(request);
+    const origin = request.headers.get('Origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://arquiv.org';
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo,
+        redirectTo: `${origin}/auth/callback`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',

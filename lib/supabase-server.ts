@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
+import type { NextRequest, NextResponse } from 'next/server';
 
 export async function getAuthenticatedSupabaseClient() {
   const cookieStore = await cookies();
@@ -21,6 +22,29 @@ export async function getAuthenticatedSupabaseClient() {
           } catch {
             // Called from a Server Component — safe to ignore.
           }
+        },
+      },
+    }
+  );
+}
+
+export function createEdgeSupabaseClient(
+  request: Pick<NextRequest, 'cookies'>,
+  response?: Pick<NextResponse, 'cookies'>
+) {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          if (!response) return;
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
         },
       },
     }

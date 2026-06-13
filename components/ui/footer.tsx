@@ -10,8 +10,9 @@ interface FooterProps {
     label: string
   }>
   mainLinks: Array<{
-    href: string
+    href?: string
     label: string
+    onClick?: () => void
   }>
   legalLinks: Array<{
     href: string
@@ -65,12 +66,21 @@ export function Footer({
             <ul className="list-none flex flex-wrap -my-1 -mx-2 lg:justify-end">
               {mainLinks.map((link, i) => (
                 <li key={i} className="my-1 mx-2 shrink-0">
-                  <a
-                    href={link.href}
-                    className="text-sm text-primary underline-offset-4 hover:underline"
-                  >
-                    {link.label}
-                  </a>
+                  {link.onClick ? (
+                    <button
+                      onClick={link.onClick}
+                      className="text-sm text-primary underline-offset-4 hover:underline"
+                    >
+                      {link.label}
+                    </button>
+                  ) : (
+                    <a
+                      href={link.href}
+                      className="text-sm text-primary underline-offset-4 hover:underline"
+                    >
+                      {link.label}
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>
