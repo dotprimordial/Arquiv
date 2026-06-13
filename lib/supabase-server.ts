@@ -4,7 +4,17 @@ import { cookies } from 'next/headers';
 import type { NextRequest, NextResponse } from 'next/server';
 
 export async function getAuthenticatedSupabaseClient() {
-  const cookieStore = await cookies();
+  let cookieStore;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    // Fallback for Edge Runtime (Cloudflare Workers) where cookies() is unavailable
+    console.warn('[Supabase] cookies() not available, using anonymous client');
+    return createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    );
+  }
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || '',

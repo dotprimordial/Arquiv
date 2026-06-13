@@ -1,12 +1,30 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createEdgeSupabaseClient } from '@/lib/supabase-server';
+import { createServerClient } from '@supabase/ssr';
 
 export const runtime = 'edge';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createEdgeSupabaseClient(request);
     const origin = request.headers.get('Origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://arquiv.org';
+
+    const pendingCookies: { name: string; value: string; options: Record<string, unknown> }[] = [];
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              pendingCookies.push({ name, value, options });
+            });
+          },
+        },
+      }
+    );
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -24,7 +42,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, url: null, error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true, url: data.url });
+    const response = NextResponse.json({ success: true, url: data.url });
+    for (const { name, value, options } of pendingCookies) {
+      response.cookies.set(name, value, options);
+    }
+    return response;
   } catch (err) {
     console.error('[api/auth/google-url] Error:', err);
     return NextResponse.json(
