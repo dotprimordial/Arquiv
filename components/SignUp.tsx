@@ -6,6 +6,7 @@ import { GoogleIcon } from './ui/google-icon';
 import { signUpAction, getGoogleOAuthUrlAction } from '@/app/actions/auth-actions';
 import { useRouter } from 'next/navigation';
 import { useAsyncAction } from '@/hooks/use-async-action';
+import { RippleButton } from '@/components/ui/multi-type-ripple-buttons';
 
 export default function SignUp({ onToggle, onClose }: { onToggle: () => void; onClose?: () => void }) {
   const router = useRouter();
@@ -87,10 +88,10 @@ export default function SignUp({ onToggle, onClose }: { onToggle: () => void; on
           </div>
         )}
 
-        <button
+        <RippleButton variant="ghost"
           type="submit"
           disabled={signupActionHook.isLoading}
-          className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 ${
+          className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 ${
             signupActionHook.isSuccess
               ? 'bg-emerald-600 text-white'
               : signupActionHook.isError
@@ -105,7 +106,7 @@ export default function SignUp({ onToggle, onClose }: { onToggle: () => void; on
           ) : (
             <><UserPlus className="w-5 h-5" /> Registar</>
           )}
-        </button>
+        </RippleButton>
       </form>
 
       <div className="relative my-8">

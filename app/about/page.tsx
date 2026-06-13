@@ -18,7 +18,7 @@ export default function About() {
               Sobre o Arquiv
             </h1>
             <p className="text-zinc-500 text-base leading-relaxed">
-              Plataforma de pesquisa semântica de normas técnicas de construção e legislação para Moçambique e PALOP.
+              Plataforma de pesquisa inteligente de normas técnicas de construção
             </p>
             <p className="mt-4 text-xs text-zinc-400">
               Última actualização: Junho 2026
@@ -33,13 +33,14 @@ export default function About() {
             Missão
           </h2>
           <p className="text-zinc-600 text-sm leading-relaxed mb-4">
-            O Arquiv nasceu da necessidade de tornar o acesso a normas técnicas de construção mais rápido, preciso e acessível.
-            Em Moçambique, profissionais de arquitectura, engenharia e construção enfrentam dificuldades em localizar
-            regulamentos actualizados — frequentemente perdidos em PDFs dispersos ou documentos desactualizados.
+            O Arquiv nasceu da necessidade de tornar o acesso e a pesquisa por normas construção mais rápido, preciso e acessível.
+            Agora você pode pesquisar descrevendo uma situação real, um cenário de obra ou uma dúvida em linguagem natural. A nossa tecnologia interpreta o significado por trás das suas palavras e entrega o resultado preciso que você procura.
+            Profissionais de arquitectura, engenharia e construção enfrentam dificuldades em localizar
+            regulamentos actualizados frequentemente perdidos em PDFs dispersos ou documentos desactualizados.
           </p>
           <p className="text-zinc-600 text-sm leading-relaxed mb-4">
-            A nossa missão é centralizar, estruturar e disponibilizar estas normas através de inteligência artificial,
-            permitindo que qualquer profissional encontre o artigo relevante em segundos, não em horas.
+            A nossa missão é centralizar, estruturar e disponibilizar estas normas junto com uma poderosa ferramenta de pesquisa, onde você pode simplesmente perguntar e obter respostas precisas.
+            permitindo que qualquer profissional encontre o artigo relevante em segundos. 
           </p>
 
           <h2 className="text-lg font-semibold tracking-tight text-zinc-900 mt-14 mb-4 pb-3 border-b border-zinc-100">
@@ -51,7 +52,7 @@ export default function About() {
           <ul className="space-y-2 mb-4">
             <li className="flex gap-2 text-zinc-600 text-sm leading-relaxed">
               <span className="mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-zinc-300" />
-              <span><strong className="text-zinc-800 font-semibold">Pesquisa Semântica com IA:</strong> Usamos o modelo Gemma 4 para interpretar a intenção da sua pergunta e encontrar artigos relevantes, mesmo que não use as palavras exactas da norma.</span>
+              <span><strong className="text-zinc-800 font-semibold">Pesquisa Inteligente:</strong> Pesquisa que interpretar a intenção da sua pergunta e encontrar artigos relevantes, mesmo que não use as palavras exactas da norma.</span>
             </li>
             <li className="flex gap-2 text-zinc-600 text-sm leading-relaxed">
               <span className="mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-zinc-300" />
@@ -59,32 +60,7 @@ export default function About() {
             </li>
             <li className="flex gap-2 text-zinc-600 text-sm leading-relaxed">
               <span className="mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-zinc-300" />
-              <span><strong className="text-zinc-800 font-semibold">Cobertura Multi-País:</strong> Suporte para normas de Moçambique, Portugal e outros países PALOP.</span>
-            </li>
-          </ul>
-
-          <h2 className="text-lg font-semibold tracking-tight text-zinc-900 mt-14 mb-4 pb-3 border-b border-zinc-100">
-            Tecnologia
-          </h2>
-          <p className="text-zinc-600 text-sm leading-relaxed mb-4">
-            O Arquiv é construído com tecnologias modernas para garantir desempenho, escalabilidade e precisão:
-          </p>
-          <ul className="space-y-2 mb-4">
-            <li className="flex gap-2 text-zinc-600 text-sm leading-relaxed">
-              <span className="mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-zinc-300" />
-              <span><strong className="text-zinc-800 font-semibold">Frontend:</strong> Next.js 15 + React 19 + Tailwind CSS 4</span>
-            </li>
-            <li className="flex gap-2 text-zinc-600 text-sm leading-relaxed">
-              <span className="mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-zinc-300" />
-              <span><strong className="text-zinc-800 font-semibold">IA:</strong> Google Gemma 4 (via OpenRouter) para busca semântica e interpretação</span>
-            </li>
-            <li className="flex gap-2 text-zinc-600 text-sm leading-relaxed">
-              <span className="mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-zinc-300" />
-              <span><strong className="text-zinc-800 font-semibold">Base de Dados:</strong> Supabase (PostgreSQL + vector embeddings)</span>
-            </li>
-            <li className="flex gap-2 text-zinc-600 text-sm leading-relaxed">
-              <span className="mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-zinc-300" />
-              <span><strong className="text-zinc-800 font-semibold">Deploy:</strong> Cloudflare Pages</span>
+              <span><strong className="text-zinc-800 font-semibold">Cobertura Multi-País:</strong> Suporte para normas de Moçambique, Portugal e outros países.</span>
             </li>
           </ul>
 

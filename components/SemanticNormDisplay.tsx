@@ -12,6 +12,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import { SearchResult, generateNormSummaryServer, reprocessNormSectionsAction } from '@/app/actions/norm-actions';
+import { RippleButton } from '@/components/ui/multi-type-ripple-buttons';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -477,7 +478,7 @@ function SemanticNormDisplay({
                 </Link>
 
                 {isAdmin && (
-                  <button
+                  <RippleButton variant="ghost"
                     onClick={(e) => {
                       e.preventDefault();
                       handleGenerateSummary(group.normId);
@@ -502,10 +503,10 @@ function SemanticNormDisplay({
                       <Wand2 className="w-4 h-4" />
                     )}
                     {summarySuccessId === group.normId ? 'Pronto' : summaryErrorId === group.normId ? 'Erro' : 'Resumir'}
-                  </button>
+                  </RippleButton>
                 )}
                 {isAdmin && (
-                  <button
+                  <RippleButton variant="ghost"
                     onClick={(e) => {
                       e.preventDefault();
                       handleRegenerate(group.normId);
@@ -530,7 +531,7 @@ function SemanticNormDisplay({
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                     )}
                     {regenerateSuccessId === group.normId ? 'Feito' : regenerateErrorId === group.normId ? 'Erro' : 'Regenerar'}
-                  </button>
+                  </RippleButton>
                 )}
               </div>
             </div>

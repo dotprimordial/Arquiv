@@ -6,6 +6,7 @@ import { GoogleIcon } from './ui/google-icon';
 import { loginAction } from '@/app/actions/auth-actions';
 import { useSearchParams } from 'next/navigation';
 import { useAsyncAction } from '@/hooks/use-async-action';
+import { RippleButton } from '@/components/ui/multi-type-ripple-buttons';
 
 export default function SignIn({ onToggle, onClose }: { onToggle: () => void; onClose?: () => void }) {
   const searchParams = useSearchParams();
@@ -94,7 +95,7 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
           </div>
         )}
 
-        <button
+        <RippleButton variant="ghost"
           type="submit"
           disabled={loginActionHook.isLoading}
           className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 ${
@@ -112,7 +113,7 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
           ) : (
             <><LogIn className="w-5 h-5" /> Entrar</>
           )}
-        </button>
+        </RippleButton>
       </form>
 
       <div className="relative my-8">

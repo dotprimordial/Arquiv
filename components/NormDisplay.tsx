@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { Trash2, Edit2 } from 'lucide-react';
 import { Norm } from '@/lib/gemini';
 import { generateNormSummaryServer, reprocessNormSectionsAction } from '@/app/actions/norm-actions';
+import { RippleButton } from '@/components/ui/multi-type-ripple-buttons';
 import { toast } from 'sonner';
 import { SearchLoading } from './ui/search-loading';
 
@@ -224,7 +225,7 @@ function NormDisplay({
                       </Link>
 
                       {isAdmin && (
-                        <button
+                        <RippleButton variant="ghost"
                           onClick={(e) => {
                             e.preventDefault();
                             handleGenerateSummary(norm.id);
@@ -249,10 +250,10 @@ function NormDisplay({
                             <Wand2 className="w-4 h-4" />
                           )}
                           {summarySuccessId === norm.id ? 'Pronto' : summaryErrorId === norm.id ? 'Erro' : 'Resumir'}
-                        </button>
+                        </RippleButton>
                       )}
                       {isAdmin && (
-                        <button
+                        <RippleButton variant="ghost"
                           onClick={(e) => {
                             e.preventDefault();
                             handleRegenerate(norm.id);
@@ -277,7 +278,7 @@ function NormDisplay({
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                           )}
                           {regenerateSuccessId === norm.id ? 'Feito' : regenerateErrorId === norm.id ? 'Erro' : 'Regenerar'}
-                        </button>
+                        </RippleButton>
                       )}
                     </div>
 

@@ -252,6 +252,7 @@
 }
 
 :root {
+  --button-ripple-color: oklch(0.145 0 0 / 0.3);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -314,6 +315,7 @@
 }
 
 .dark {
+  --button-ripple-color: oklch(0.985 0 0 / 0.5);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

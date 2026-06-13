@@ -1,141 +1,141 @@
-# PRIVACY POLICY
-**Last Updated: June 11, 2026**
+# POLÍTICA DE PRIVACIDADE
+**Última atualização: 11 de Junho de 2026**
 **SaaSarc / arquiv.org**
 
-This Privacy Notice for **SaaSarc** ("**we**," "**us**," or "**our**"), describes how and why we might access, collect, store, use, and/or share ("**process**") your personal information when you use our services ("**Services**"), including when you visit our website at [https://arquiv.org](https://arquiv.org) or engage with us in other related ways.
+Este Aviso de Privacidade da **SaaSarc** ("**nós**," "**nosso**" ou "**connosco**") descreve como e por que podemos aceder, coletar, armazenar, usar e/ou partilhar ("**processar**") as suas informações pessoais quando utiliza os nossos serviços ("**Serviços**"), incluindo quando visita o nosso site em [https://arquiv.org](https://arquiv.org) ou interage connosco de outras formas relacionadas.
 
-> **Questions or concerns?** Reading this Privacy Notice will help you understand your privacy rights and choices. If you do not agree with our policies and practices, please do not use our Services. If you still have any questions or concerns, please contact us at seantomasytbr@gmail.com.
-
----
-
-## Table of Contents
-1. WHAT INFORMATION DO WE COLLECT?
-2. HOW DO WE PROCESS YOUR INFORMATION?
-3. WHAT LEGAL BASES DO WE RELY ON TO PROCESS YOUR PERSONAL INFORMATION?
-4. WHEN AND WITH WHOM DO WE SHARE YOUR PERSONAL INFORMATION?
-5. WHAT IS OUR STANCE ON THIRD-PARTY WEBSITES?
-6. DO WE OFFER ARTIFICIAL INTELLIGENCE-BASED PRODUCTS?
-7. HOW DO WE HANDLE YOUR SOCIAL LOGINS?
-8. HOW LONG DO WE KEEP YOUR INFORMATION?
-9. HOW DO WE KEEP YOUR INFORMATION SAFE?
-10. WHAT ARE YOUR PRIVACY RIGHTS?
-11. CONTROLS FOR DO-NOT-TRACK FEATURES
-12. DO UNITED STATES RESIDENTS HAVE SPECIFIC PRIVACY RIGHTS?
-13. DO OTHER REGIONS HAVE SPECIFIC PRIVACY RIGHTS?
-14. DO WE MAKE UPDATES TO THIS NOTICE?
-15. HOW CAN YOU CONTACT US ABOUT THIS NOTICE?
-16. HOW CAN YOU REVIEW, UPDATE, OR DELETE THE DATA WE COLLECT FROM YOU?
+> **Dúvidas ou preocupações?** A leitura deste Aviso de Privacidade ajudá-lo-á a compreender os seus direitos de privacidade e escolhas. Se não concordar com as nossas políticas e práticas, por favor não utilize os nossos Serviços. Se ainda tiver dúvidas ou preocupações, contacte-nos através de seantomasytbr@gmail.com.
 
 ---
 
-## 1. WHAT INFORMATION DO WE COLLECT?
-***In Short:*** *We collect personal information that you provide to us, as well as core connectivity metrics like your IP address.*
-
-### Personal information you disclose to us
-We collect personal information that you voluntarily provide to us when you register on the Services, express an interest in obtaining information about us or our products and Services, or when you contact us.
-* **Social Login Data:** We provide you with the option to register and log in using your existing Google account details. The data we receive depends on your Google privacy settings but typically includes your name, email address, and profile picture.
-
-### Information automatically collected
-***In Short:*** *Some information — such as your Internet Protocol (IP) address and/or browser and device characteristics — is collected automatically when you visit our Services.*
-
-We automatically collect certain information when you visit, use, or navigate the Services. This information does not reveal your specific identity but includes:
-* **Log and Usage Data:** We collect your Internet Protocol (IP) address, browser characteristics, operating system, language preferences, device name, and information about how and when you use our Services.
-
----
-
-## 2. HOW DO WE PROCESS YOUR INFORMATION?
-***In Short:*** *We process your information to provide, improve, and administer our Services, communicate with you, for security and fraud prevention, and to comply with law.*
-
-We process your personal information for a variety of reasons, depending on how you interact with our Services, including:
-* **To facilitate account creation and authentication:** We process your Google social login data to allow you to seamlessly create and log in to your account.
-* **To manage user accounts and balances:** We process your information to keep your account in working order and track your available service credits.
-* **To deliver and facilitate delivery of services:** We process your queries and interaction data to provide you with architectural document search capabilities.
-* **To protect our Services:** We monitor IP addresses and login data as part of our efforts to keep our Services safe, secure, and to prevent fraudulent activities.
+## Índice
+1. QUE INFORMAÇÕES COLECTAMOS?
+2. COMO PROCESSAMOS AS SUAS INFORMAÇÕES?
+3. QUAIS AS BASES LEGAIS PARA PROCESSAR AS SUAS INFORMAÇÕES PESSOAIS?
+4. QUANDO E COM QUEM PARTILHAMOS AS SUAS INFORMAÇÕES PESSOAIS?
+5. QUAL A NOSSA POSIÇÃO SOBRE SITES DE TERCEIROS?
+6. OFERECEMOS PRODUTOS BASEADOS EM INTELIGÊNCIA ARTIFICIAL?
+7. COMO LIDAMOS COM OS SEUS LOGINS SOCIAIS?
+8. POR QUANTO TEMPO MANTEMOS AS SUAS INFORMAÇÕES?
+9. COMO MANTEMOS AS SUAS INFORMAÇÕES SEGURAS?
+10. QUAIS SÃO OS SEUS DIREITOS DE PRIVACIDADE?
+11. CONTROLES PARA FUNÇÕES DE NÃO RASTREAMENTO
+12. RESIDENTES DOS ESTADOS UNIDOS TÊM DIREITOS ESPECÍFICOS DE PRIVACIDADE?
+13. OUTRAS REGIÕES TÊM DIREITOS ESPECÍFICOS DE PRIVACIDADE?
+14. FAZEMOS ATUALIZAÇÕES A ESTE AVISO?
+15. COMO PODE CONTACTAR-NOS SOBRE ESTE AVISO?
+16. COMO PODE REVER, ATUALIZAR OU ELIMINAR OS DADOS QUE COLECTAMOS DE SI?
 
 ---
 
-## 3. WHAT LEGAL BASES DO WE RELY ON TO PROCESS YOUR PERSONAL INFORMATION?
-***In Short:*** *We only process your personal information when we believe it is necessary and we have a valid legal reason (i.e., legal basis) to do so under applicable law.*
+## 1. QUE INFORMAÇÕES COLECTAMOS?
+***Em resumo:*** *Coletamos informações pessoais que nos fornece, bem como métricas de conectividade essenciais, como o seu endereço IP.*
 
-We rely on the following valid legal bases to process your personal information:
-* **Consent:** We process your data if you have given us clear permission for a specific purpose (e.g., logging in via Google).
-* **Performance of a Contract:** We process your information, including your balance and account state, when it is necessary to fulfill our commitment to providing our Services and processing your top-ups.
-* **Legitimate Interests:** We process your data when we believe it is reasonably necessary to achieve our legitimate business interests, such as optimizing our search engine infrastructure and securing our application from abuse.
+### Informações pessoais que nos divulga
+Coletamos informações pessoais que nos fornece voluntariamente quando se regista nos Serviços, manifesta interesse em obter informações sobre nós ou os nossos produtos e Serviços, ou quando nos contacta.
+* **Dados de Login Social:** Oferecemos a opção de se registar e iniciar sessão usando os detalhes da sua conta Google. Os dados que recebemos dependem das suas configurações de privacidade do Google, mas geralmente incluem o seu nome, endereço de e-mail e foto de perfil.
 
----
+### Informações recolhidas automaticamente
+***Em resumo:*** *Algumas informações — como o seu endereço de Protocolo de Internet (IP) e/ou características do navegador e dispositivo — são coletadas automaticamente quando visita os nossos Serviços.*
 
-## 4. WHEN AND WITH WHOM DO WE SHARE YOUR PERSONAL INFORMATION?
-***In Short:*** *We do not sell your data. We share information only in specific situations with financial processors to process transactions.*
-
-We may need to share your personal information in the following situations:
-* **Payment Processors:** We do not directly store or collect your payment card or mobile wallet details. For financial transactions, your payment information is provided directly to our third-party payment processors (**PayPal, Visa, MasterCard, or e-Mola**). Their use of your personal information is governed by their respective Privacy Policies.
+Coletamos automaticamente certas informações quando visita, utiliza ou navega nos Serviços. Estas informações não revelam a sua identidade específica, mas incluem:
+* **Dados de Registo e Utilização:** Coletamos o seu endereço de Protocolo de Internet (IP), características do navegador, sistema operativo, preferências de idioma, nome do dispositivo e informações sobre como e quando utiliza os nossos Serviços.
 
 ---
 
-## 5. WHAT IS OUR STANCE ON THIRD-PARTY WEBSITES?
-***In Short:*** *We are not responsible for the safety of any information that you share with third-party providers that process your authentication or financial transactions.*
+## 2. COMO PROCESSAMOS AS SUAS INFORMAÇÕES?
+***Em resumo:*** *Processamos as suas informações para fornecer, melhorar e administrar os nossos Serviços, comunicar consigo, para segurança e prevenção de fraudes, e para cumprir a lei.*
 
-Our Services utilize third-party platforms for authentication (Google) and financial transactions (PayPal, e-Mola, etc.). We cannot guarantee the safety and privacy of data you provide directly to these third parties once you leave our platform. Any data collected by third parties is governed by their own privacy practices and policies.
-
----
-
-## 6. DO WE OFFER ARTIFICIAL INTELLIGENCE-BASED PRODUCTS?
-***In Short:*** *Yes, we utilize Artificial Intelligence to process your search requests, but we do not share your private identity with the AI models.*
-
-As part of our core features, we use advanced semantic search capabilities powered by Artificial Intelligence (**Gemma 4**).
-* **What we share:** When you perform a search on our platform, the text of your query is transmitted to the AI language model infrastructure solely to analyze, interpret, and understand the contextual meaning of your search.
-* **What we do NOT share:** We do not send your name, email address, IP address, or account identifiers to the AI model provider. The AI only processes the raw search terms to return accurate architectural and document results.
+Processamos as suas informações pessoais por várias razões, dependendo de como interage com os nossos Serviços, incluindo:
+* **Para facilitar a criação e autenticação de conta:** Processamos os seus dados de login social do Google para permitir que crie e aceda à sua conta de forma integrada.
+* **Para gerir contas de utilizador e saldos:** Processamos as suas informações para manter a sua conta em funcionamento e rastrear os seus créditos de serviço disponíveis.
+* **Para fornecer e facilitar a prestação de serviços:** Processamos as suas consultas e dados de interação para lhe fornecer capacidades de pesquisa de documentos arquitetónicos.
+* **Para proteger os nossos Serviços:** Monitorizamos endereços IP e dados de login como parte dos nossos esforços para manter os nossos Serviços seguros e prevenir atividades fraudulentas.
 
 ---
 
-## 7. HOW DO WE HANDLE YOUR SOCIAL LOGINS?
-Our Services offer you the ability to register and log in using your third-party Google account credentials. Where you choose to do this, we will receive certain profile information about you from Google, typically including your name and email address. We will use the information received only for the purposes that are described in this Privacy Notice. Please note that we do not control, and are not responsible for, other uses of your personal information by Google.
+## 3. QUAIS AS BASES LEGAIS PARA PROCESSAR AS SUAS INFORMAÇÕES PESSOAIS?
+***Em resumo:*** *Processamos as suas informações pessoais apenas quando acreditamos ser necessário e temos uma razão legal válida (ou seja, base legal) para o fazer ao abrigo da lei aplicável.*
+
+Baseamo-nos nas seguintes bases legais válidas para processar as suas informações pessoais:
+* **Consentimento:** Processamos os seus dados se nos tiver dado permissão clara para um fim específico (por exemplo, iniciar sessão via Google).
+* **Execução de um Contrato:** Processamos as suas informações, incluindo o seu saldo e estado da conta, quando necessário para cumprir o nosso compromisso de fornecer os nossos Serviços e processar os seus carregamentos.
+* **Interesses Legítimos:** Processamos os seus dados quando acreditamos ser razoavelmente necessário para atingir os nossos legítimos interesses comerciais, como otimizar a nossa infraestrutura de pesquisa e proteger a nossa aplicação contra abusos.
 
 ---
 
-## 8. HOW LONG DO WE KEEP YOUR INFORMATION?
-We will only keep your personal information for as long as it is necessary for the purposes set out in this Privacy Notice, such as maintaining your active account and transaction history.
+## 4. QUANDO E COM QUEM PARTILHAMOS AS SUAS INFORMAÇÕES PESSOAIS?
+***Em resumo:*** *Não vendemos os seus dados. Partilhamos informações apenas em situações específicas com processadores financeiros para realizar transações.*
 
-> If you wish to terminate your account and have your data removed, you may request account deletion at any time by sending an email. Upon receiving your deletion request, all your associated personal data (including email, IP logs, and balance records) will be permanently and immediately deleted from our active databases.
-
----
-
-## 9. HOW DO WE KEEP YOUR INFORMATION SAFE?
-We have implemented appropriate technical and organizational security measures designed to protect the security of any personal information we process, including encryption for data in transit and secure database storage. However, despite our safeguards, no electronic transmission over the Internet or information storage technology can be guaranteed to be 100% secure, so we cannot promise or guarantee that cybercriminals or other unauthorized third parties will not be able to defeat our security and improperly collect, access, steal, or modify your information.
+Podemos precisar de partilhar as suas informações pessoais nas seguintes situações:
+* **Processadores de Pagamento:** Não armazenamos ou coletamos diretamente os detalhes do seu cartão de pagamento ou carteira móvel. Para transações financeiras, as suas informações de pagamento são fornecidas diretamente aos nossos processadores de pagamento terceiros (**PayPal, Visa, MasterCard ou e-Mola**). A utilização das suas informações pessoais por estes é regida pelas respetivas Políticas de Privacidade.
 
 ---
 
-## 10. WHAT ARE YOUR PRIVACY RIGHTS?
-Regardless of where you reside globally, we respect your privacy rights and provide you with the ability to request access, rectification, or absolute erasure of your personal data. If you are located in the European Economic Area (EEA), United Kingdom (UK), or other jurisdictions with comprehensive privacy frameworks (like GDPR), you possess specific legal rights regarding your data which we honor through our global deletion and data access policies.
+## 5. QUAL A NOSSA POSIÇÃO SOBRE SITES DE TERCEIROS?
+***Em resumo:*** *Não somos responsáveis pela segurança de qualquer informação que partilhe com fornecedores terceiros que processam a sua autenticação ou transações financeiras.*
+
+Os nossos Serviços utilizam plataformas terceiras para autenticação (Google) e transações financeiras (PayPal, e-Mola, etc.). Não podemos garantir a segurança e privacidade dos dados que fornece diretamente a estes terceiros depois de sair da nossa plataforma. Quaisquer dados coletados por terceiros são regidos pelas suas próprias práticas e políticas de privacidade.
 
 ---
 
-## 11. CONTROLS FOR DO-NOT-TRACK FEATURES
-Most web browsers and some mobile operating systems include a Do-Not-Track ("DNT") feature or setting you can activate to signal your privacy preference. At this stage, no uniform technology standard for recognizing and implementing DNT signals has been finalized. As such, we do not currently respond to DNT browser signals or any other mechanism that automatically communicates your choice not to be tracked online.
+## 6. OFERECEMOS PRODUTOS BASEADOS EM INTELIGÊNCIA ARTIFICIAL?
+***Em resumo:*** *Sim, utilizamos Inteligência Artificial para processar as suas pesquisas, mas não partilhamos a sua identidade privada com os modelos de IA.*
+
+Como parte das nossas funcionalidades principais, utilizamos capacidades de pesquisa semântica avançada alimentadas por Inteligência Artificial (**Gemma 4**).
+* **O que partilhamos:** Quando realiza uma pesquisa na nossa plataforma, o texto da sua consulta é transmitido à infraestrutura do modelo de linguagem de IA apenas para analisar, interpretar e compreender o significado contextual da sua pesquisa.
+* **O que NÃO partilhamos:** Não enviamos o seu nome, endereço de e-mail, endereço IP ou identificadores de conta ao fornecedor do modelo de IA. A IA processa apenas os termos de pesquisa brutos para devolver resultados arquitetónicos e documentais precisos.
 
 ---
 
-## 12. DO UNITED STATES RESIDENTS HAVE SPECIFIC PRIVACY RIGHTS?
-Yes, if you are a resident of states with comprehensive privacy laws (such as California, Virginia, Colorado, Connecticut, or Utah), you are granted specific rights regarding your personal information. We ensure compliance by not selling your personal data, not sharing it for cross-context behavioral advertising, and allowing you to request immediate deletion of your data by contacting us directly.
+## 7. COMO LIDAMOS COM OS SEUS LOGINS SOCIAIS?
+Os nossos Serviços oferecem a capacidade de se registar e iniciar sessão usando as credenciais da sua conta Google. Se escolher fazê-lo, receberemos certas informações de perfil suas do Google, geralmente incluindo o seu nome e endereço de e-mail. Utilizaremos as informações recebidas apenas para os fins descritos neste Aviso de Privacidade. Note que não controlamos e não somos responsáveis por outros usos das suas informações pessoais por parte do Google.
 
 ---
 
-## 13. DO OTHER REGIONS HAVE SPECIFIC PRIVACY RIGHTS?
-Yes, users accessing our services from other regions, including African nations (such as Mozambique under local electronic transactions and data protection frameworks), are guaranteed that their electronic data is processed transparently, securely, and solely for the execution of the architectural search services explicitly contracted on our platform.
+## 8. POR QUANTO TEMPO MANTEMOS AS SUAS INFORMAÇÕES?
+Manteremos as suas informações pessoais apenas pelo tempo necessário para os fins estabelecidos neste Aviso de Privacidade, como manter a sua conta ativa e o histórico de transações.
+
+> Se desejar encerrar a sua conta e ter os seus dados removidos, pode solicitar a eliminação da conta a qualquer momento enviando um e-mail. Após receber o seu pedido de eliminação, todos os seus dados pessoais associados (incluindo e-mail, registos de IP e saldos) serão permanente e imediatamente eliminados das nossas bases de dados ativas.
 
 ---
 
-## 14. DO WE MAKE UPDATES TO THIS NOTICE?
-We may update this Privacy Notice from time to time. The updated version will be indicated by an updated "Revised" date and will be effective as soon as it is accessible. We encourage you to review this Privacy Notice frequently to be informed of how we are protecting your information.
+## 9. COMO MANTEMOS AS SUAS INFORMAÇÕES SEGURAS?
+Implementamos medidas de segurança técnicas e organizacionais apropriadas para proteger a segurança de qualquer informação pessoal que processamos, incluindo encriptação para dados em trânsito e armazenamento seguro em base de dados. No entanto, apesar das nossas salvaguardas, nenhuma transmissão eletrónica pela Internet ou tecnologia de armazenamento de informações pode ser garantida como 100% segura, pelo que não podemos prometer ou garantir que cibercriminosos ou outros terceiros não autorizados não consigam derrotar a nossa segurança e coletar, aceder, roubar ou modificar indevidamente as suas informações.
 
 ---
 
-## 15. HOW CAN YOU CONTACT US ABOUT THIS NOTICE?
-If you have questions, comments, or concerns about this notice, you may email us directly at: seantomasytbr@gmail.com
+## 10. QUAIS SÃO OS SEUS DIREITOS DE PRIVACIDADE?
+Independentemente de onde reside globalmente, respeitamos os seus direitos de privacidade e fornecemos-lhe a capacidade de solicitar acesso, retificação ou eliminação absoluta dos seus dados pessoais. Se estiver localizado no Espaço Económico Europeu (EEE), Reino Unido (RU) ou outras jurisdições com estruturas de privacidade abrangentes (como o GDPR), possui direitos legais específicos relativamente aos seus dados, que honramos através das nossas políticas globais de eliminação e acesso a dados.
 
 ---
 
-## 16. HOW CAN YOU REVIEW, UPDATE, OR DELETE THE DATA WE COLLECT FROM YOU?
-Based on the applicable laws of your country, you have the right to request access to the personal information we collect from you, change that information, or delete it.
+## 11. CONTROLES PARA FUNÇÕES DE NÃO RASTREAMENTO
+A maioria dos navegadores web e alguns sistemas operativos móveis incluem uma funcionalidade ou definição Do-Not-Track ("DNT") que pode ativar para sinalizar a sua preferência de privacidade. Nesta fase, nenhum padrão tecnológico uniforme para reconhecer e implementar sinais DNT foi finalizado. Como tal, atualmente não respondemos a sinais de navegador DNT ou qualquer outro mecanismo que comunique automaticamente a sua escolha de não ser rastreado online.
 
-To request to **delete your account and permanently erase your data** from our system, please send an explicit email request to seantomasytbr@gmail.com using the email address associated with your account. We will process your request and permanently delete your records from our databases immediately upon verification.
+---
+
+## 12. RESIDENTES DOS ESTADOS UNIDOS TÊM DIREITOS ESPECÍFICOS DE PRIVACIDADE?
+Sim, se for residente de estados com leis de privacidade abrangentes (como Califórnia, Virgínia, Colorado, Connecticut ou Utah), são-lhe concedidos direitos específicos relativamente às suas informações pessoais. Garantimos a conformidade não vendendo os seus dados pessoais, não os partilhando para publicidade comportamental entre contextos e permitindo-lhe solicitar a eliminação imediata dos seus dados contactando-nos diretamente.
+
+---
+
+## 13. OUTRAS REGIÕES TÊM DIREITOS ESPECÍFICOS DE PRIVACIDADE?
+Sim, os utilizadores que acedem aos nossos serviços de outras regiões, incluindo nações africanas (como Moçambique ao abrigo das leis locais de transações eletrónicas e proteção de dados), têm a garantia de que os seus dados eletrónicos são processados de forma transparente, segura e exclusivamente para a execução dos serviços de pesquisa arquitetónica explicitamente contratados na nossa plataforma.
+
+---
+
+## 14. FAZEMOS ATUALIZAÇÕES A ESTE AVISO?
+Podemos atualizar este Aviso de Privacidade periodicamente. A versão atualizada será indicada por uma data "Revisto" atualizada e entrará em vigor assim que estiver acessível. Encorajamo-lo a rever este Aviso de Privacidade frequentemente para se manter informado sobre como estamos a proteger as suas informações.
+
+---
+
+## 15. COMO PODE CONTACTAR-NOS SOBRE ESTE AVISO?
+Se tiver perguntas, comentários ou preocupações sobre este aviso, pode enviar-nos um e-mail diretamente para: seantomasytbr@gmail.com
+
+---
+
+## 16. COMO PODE REVER, ATUALIZAR OU ELIMINAR OS DADOS QUE COLECTAMOS DE SI?
+Com base nas leis aplicáveis do seu país, tem o direito de solicitar acesso às informações pessoais que coletamos de si, alterar essas informações ou eliminá-las.
+
+Para solicitar a **eliminação da sua conta e apagar permanentemente os seus dados** do nosso sistema, envie um pedido de e-mail explícito para seantomasytbr@gmail.com usando o endereço de e-mail associado à sua conta. Processaremos o seu pedido e eliminaremos permanentemente os seus registos das nossas bases de dados imediatamente após a verificação.

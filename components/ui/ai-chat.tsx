@@ -6,6 +6,7 @@ import { Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BGPattern } from "./bg-pattern";
 import { chatWithNormAssistant } from "@/app/actions/ai-chat";
+import { RippleButton } from "@/components/ui/multi-type-ripple-buttons";
 
 export default function AIChatCard({ className }: { className?: string }) {
   const [messages, setMessages] = useState<{ sender: "ai" | "user"; text: string }[]>([
@@ -126,7 +127,7 @@ export default function AIChatCard({ className }: { className?: string }) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
           />
-          <button
+          <RippleButton variant="ghost"
             onClick={handleSend}
             disabled={isTyping || !input.trim()}
             className={`p-2 rounded-lg transition-colors text-white disabled:opacity-40 ${
@@ -138,7 +139,7 @@ export default function AIChatCard({ className }: { className?: string }) {
             ) : (
               <Send className="w-4 h-4" />
             )}
-          </button>
+          </RippleButton>
         </div>
       </div>
     </div>

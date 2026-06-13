@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { getSessionAction } from '@/app/actions/auth-actions';
 import { processAndUploadNorm, analyzeDocumentStructureServer } from '@/app/actions/norm-actions';
 import Link from 'next/link';
+import { RippleButton } from '@/components/ui/multi-type-ripple-buttons';
 import nextDynamic from 'next/dynamic';
 
 // Import ReactQuill dynamically to avoid SSR issues
@@ -710,7 +711,7 @@ export default function UploadPage() {
                 </motion.div>
               )}
 
-              <button
+              <RippleButton variant="ghost"
                 type="submit"
                 disabled={isButtonDisabled}
                 className={`w-full py-4 xs:py-5 rounded-2xl font-bold text-base xs:text-lg flex items-center justify-center gap-3 transition-all disabled:opacity-50 shadow-xl shadow-zinc-200 ${
@@ -744,7 +745,7 @@ export default function UploadPage() {
                     <span className="inline xs:hidden">Publicar</span>
                   </>
                 )}
-              </button>
+              </RippleButton>
             </form>
           </div>
         </div>

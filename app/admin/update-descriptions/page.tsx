@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { updateAllNormDescriptions } from '@/app/actions/norm-actions';
+import { RippleButton } from '@/components/ui/multi-type-ripple-buttons';
 
 export default function UpdateDescriptionsPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -31,7 +32,7 @@ export default function UpdateDescriptionsPage() {
             Esta ação irá adicionar um texto de exemplo no campo <code>description</code> de todas as normas existentes na base de dados.
           </p>
           
-          <button
+          <RippleButton variant="ghost"
             onClick={handleUpdate}
             disabled={status === 'loading'}
             className={`px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 ${
@@ -51,7 +52,7 @@ export default function UpdateDescriptionsPage() {
             ) : (
               'Atualizar Todas as Descrições'
             )}
-          </button>
+          </RippleButton>
         </div>
 
         {result && (
