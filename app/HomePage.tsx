@@ -555,12 +555,12 @@ export default function HomePage() {
           </div>
 
           <div className="max-w-5xl mx-auto px-6 mb-12">
-            <div className="flex flex-wrap justify-center gap-2 px-4">
+            <div className="flex overflow-x-auto flex-nowrap lg:flex-wrap gap-2 px-4 pb-2 lg:justify-center scrollbar-hide [-ms-overflow-style:none] [scrollbar-width:none]">
               {CATEGORIES.map((cat: string) => (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all border ${selectedCategory === cat
+                  className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all border ${selectedCategory === cat
                     ? 'bg-[#1e293b] text-white border-[#1e293b]'
                     : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-300'
                     }`}
