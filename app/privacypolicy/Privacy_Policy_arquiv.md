@@ -4,7 +4,7 @@
 
 Este Aviso de Privacidade da **SaaSarc** ("**nós**," "**nosso**" ou "**connosco**") descreve como e por que podemos aceder, coletar, armazenar, usar e/ou partilhar ("**processar**") as suas informações pessoais quando utiliza os nossos serviços ("**Serviços**"), incluindo quando visita o nosso site em [https://arquiv.org](https://arquiv.org) ou interage connosco de outras formas relacionadas.
 
-> **Dúvidas ou preocupações?** A leitura deste Aviso de Privacidade ajudá-lo-á a compreender os seus direitos de privacidade e escolhas. Se não concordar com as nossas políticas e práticas, por favor não utilize os nossos Serviços. Se ainda tiver dúvidas ou preocupações, contacte-nos através de seantomasytbr@gmail.com.
+> **Dúvidas ou preocupações?** A leitura deste Aviso de Privacidade ajudá-lo-á a compreender os seus direitos de privacidade e escolhas. Se não concordar com as nossas políticas e práticas, por favor não utilize os nossos Serviços. Se ainda tiver dúvidas ou preocupações, contacte-nos através de support@arquiv.org.
 
 ---
 
@@ -131,11 +131,11 @@ Podemos atualizar este Aviso de Privacidade periodicamente. A versão atualizada
 ---
 
 ## 15. COMO PODE CONTACTAR-NOS SOBRE ESTE AVISO?
-Se tiver perguntas, comentários ou preocupações sobre este aviso, pode enviar-nos um e-mail diretamente para: seantomasytbr@gmail.com
+Se tiver perguntas, comentários ou preocupações sobre este aviso, pode enviar-nos um e-mail diretamente para: support@arquiv.org
 
 ---
 
 ## 16. COMO PODE REVER, ATUALIZAR OU ELIMINAR OS DADOS QUE COLECTAMOS DE SI?
 Com base nas leis aplicáveis do seu país, tem o direito de solicitar acesso às informações pessoais que coletamos de si, alterar essas informações ou eliminá-las.
 
-Para solicitar a **eliminação da sua conta e apagar permanentemente os seus dados** do nosso sistema, envie um pedido de e-mail explícito para seantomasytbr@gmail.com usando o endereço de e-mail associado à sua conta. Processaremos o seu pedido e eliminaremos permanentemente os seus registos das nossas bases de dados imediatamente após a verificação.
+Para solicitar a **eliminação da sua conta e apagar permanentemente os seus dados** do nosso sistema, envie um pedido de e-mail explícito para support@arquiv.org usando o endereço de e-mail associado à sua conta. Processaremos o seu pedido e eliminaremos permanentemente os seus registos das nossas bases de dados imediatamente após a verificação.

@@ -37,10 +37,10 @@ export default function Contact() {
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-6">
               <h2 className="text-sm font-semibold text-zinc-900 mb-4">Email</h2>
               <a
-                href="mailto:seantomasytbr@gmail.com"
+                href="mailto:support@arquiv.org"
                 className="text-lg font-medium text-zinc-800 underline underline-offset-4 hover:text-zinc-900 transition-colors"
               >
-                seantomasytbr@gmail.com
+                support@arquiv.org
               </a>
               <p className="text-xs text-zinc-400 mt-2">Respondemos dentro de 24-48 horas.</p>
             </div>
@@ -60,7 +60,7 @@ export default function Contact() {
           <div className="rounded-xl border border-zinc-200 p-8">
             <h2 className="text-base font-semibold text-zinc-900 mb-6">Envie-nos uma mensagem</h2>
             <form
-              action="mailto:seantomasytbr@gmail.com"
+              action="mailto:support@arquiv.org"
               method="POST"
               encType="text/plain"
               className="space-y-5"
@@ -119,8 +119,8 @@ export default function Contact() {
               <p className="text-xs text-zinc-400">Última actualização: Junho 2026</p>
               <p className="text-xs text-zinc-400">
                 Email:{" "}
-                <a href="mailto:seantomasytbr@gmail.com" className="underline underline-offset-2 hover:text-zinc-600 transition-colors">
-                  seantomasytbr@gmail.com
+                <a href="mailto:support@arquiv.org" className="underline underline-offset-2 hover:text-zinc-600 transition-colors">
+                  support@arquiv.org
                 </a>
               </p>
             </div>

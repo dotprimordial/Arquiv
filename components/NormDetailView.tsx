@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, BookOpen, Loader2, AlertCircle, Share2, X } from 'lucide-react';
+import React from 'react';
+import { motion } from 'framer-motion';
+import { ArrowLeft, BookOpen, Loader2, AlertCircle } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { useRouter } from 'next/navigation';
 
@@ -30,28 +30,6 @@ export default function NormDetailView({
   pdfUrl,
 }: NormDetailViewProps) {
   const router = useRouter();
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-
-  const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
-  const shareTitle = `${code} - Normas de ${country}`;
-  const shareText = `Consulte a norma ${code} de ${country} no Arquiv - Guia de Regulamentos Arquitetónicos`;
-
-  const shareOptions = [
-    { name: 'WhatsApp', icon: '💬', url: `https://wa.me/?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`, color: 'bg-green-500 hover:bg-green-600' },
-    { name: 'Facebook', icon: '📘', url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, color: 'bg-blue-600 hover:bg-blue-700' },
-    { name: 'Mensagens', icon: '💬', url: `sms:?body=${encodeURIComponent(`${shareText} ${shareUrl}`)}`, color: 'bg-gray-500 hover:bg-gray-600' },
-    { name: 'Email', icon: '📧', url: `mailto:?subject=${encodeURIComponent(shareTitle)}&body=${encodeURIComponent(`${shareText} ${shareUrl}`)}`, color: 'bg-purple-500 hover:bg-purple-600' },
-  ];
-
-  const handleShare = (platform: string, url: string) => {
-    window.open(url, '_blank', 'width=600,height=400');
-    setIsShareModalOpen(false);
-  };
-
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(shareUrl);
-    setIsShareModalOpen(false);
-  };
 
   return (
     <main className="min-h-screen bg-[#F9F9F8] text-zinc-900">
@@ -63,12 +41,6 @@ export default function NormDetailView({
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
             <span className="text-sm font-medium">Voltar</span>
-          </button>
-          <button
-            onClick={() => setIsShareModalOpen(true)}
-            className="p-2 text-zinc-400 hover:text-zinc-900 transition-colors"
-          >
-            <Share2 className="w-5 h-5" />
           </button>
         </div>
       </header>
@@ -144,42 +116,6 @@ export default function NormDetailView({
         )}
       </div>
 
-      <AnimatePresence>
-        {isShareModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
-            >
-              <div className="p-6 border-b border-zinc-100">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-zinc-900">Partilhar Norma</h3>
-                  <button onClick={() => setIsShareModalOpen(false)} className="p-2 text-zinc-400 hover:text-zinc-900 transition-colors rounded-lg">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <p className="text-zinc-500 text-sm mt-2">{code} - {country}</p>
-              </div>
-              <div className="p-4 xs:p-6 space-y-3">
-                {shareOptions.map((option) => (
-                  <button key={option.name} onClick={() => handleShare(option.name, option.url)} className={`w-full flex items-center gap-3 px-3 xs:px-4 py-2 xs:py-3 text-white rounded-xl transition-all text-sm xs:text-base ${option.color}`}>
-                    <span className="text-lg xs:text-xl">{option.icon}</span>
-                    <span className="font-medium">{option.name}</span>
-                  </button>
-                ))}
-                <div className="border-t border-zinc-100 pt-3">
-                  <button onClick={handleCopyLink} className="w-full flex items-center gap-3 px-3 xs:px-4 py-2 xs:py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-900 rounded-xl transition-all text-sm xs:text-base">
-                    <span className="text-lg xs:text-xl">🔗</span>
-                    <span className="font-medium">Copiar Link</span>
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </main>
   );
 }

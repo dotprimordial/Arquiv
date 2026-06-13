@@ -40,7 +40,7 @@ There is no minimum age restriction to access or use our Site, as the core Servi
 To utilize certain features of the platform, including conducting semantic searches, you are required to create an account by logging in via Google. You are entirely responsible for all activities that occur under your session authentication.
 * You are responsible for maintaining the confidentiality of your login credentials and account activity.
 * We reserve the right to remove, reclaim, or change a username you select if we determine, in our sole discretion, that such username is inappropriate, obscene, or otherwise objectionable.
-* If you wish to terminate your account, you must contact us at seantomasytbr@gmail.com, and your account data will be permanently deleted from our system.
+* If you wish to terminate your account, you must contact us at support@arquiv.org, and your account data will be permanently deleted from our system.
 
 ---
 
@@ -108,4 +108,4 @@ We will maintain certain data that you transmit to the Site for the purpose of m
 ---
 
 ## 14. CONTACT INFORMATION
-In order to resolve a complaint regarding the Site or to receive further information regarding use of the Site, please contact us at: seantomasytbr@gmail.com
+In order to resolve a complaint regarding the Site or to receive further information regarding use of the Site, please contact us at: support@arquiv.org

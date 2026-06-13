@@ -63,8 +63,8 @@ export default function TermsOfUse() {
             </p>
             <p className="mt-4 text-xs text-zinc-400">
               Last updated: June 11, 2026 · Contact:{" "}
-              <a href="mailto:seantomasytbr@gmail.com" className="underline underline-offset-2 hover:text-zinc-600 transition-colors">
-                seantomasytbr@gmail.com
+              <a href="mailto:support@arquiv.org" className="underline underline-offset-2 hover:text-zinc-600 transition-colors">
+                support@arquiv.org
               </a>
             </p>
           </div>
@@ -160,7 +160,7 @@ export default function TermsOfUse() {
             <Bullet>We reserve the right to remove, reclaim, or change a username you select if we determine, in our sole discretion, that such username is inappropriate, obscene, or otherwise objectionable.</Bullet>
             <Bullet>
               If you wish to terminate your account, contact us at{" "}
-              <a href="mailto:seantomasytbr@gmail.com" className="text-zinc-800 underline underline-offset-2">seantomasytbr@gmail.com</a>
+              <a href="mailto:support@arquiv.org" className="text-zinc-800 underline underline-offset-2">support@arquiv.org</a>
               {" "}and your account data will be permanently deleted from our system.
             </Bullet>
           </ul>
@@ -246,8 +246,8 @@ export default function TermsOfUse() {
             <strong>SaaSarc / arquiv</strong>
             <br />
             Email:{" "}
-            <a href="mailto:seantomasytbr@gmail.com" className="underline underline-offset-2">
-              seantomasytbr@gmail.com
+            <a href="mailto:support@arquiv.org" className="underline underline-offset-2">
+              support@arquiv.org
             </a>
           </Note>
 
@@ -257,8 +257,8 @@ export default function TermsOfUse() {
               <p className="text-xs text-zinc-400">Last updated: June 11, 2026</p>
               <p className="text-xs text-zinc-400">
                 Contact:{" "}
-                <a href="mailto:seantomasytbr@gmail.com" className="underline underline-offset-2 hover:text-zinc-600 transition-colors">
-                  seantomasytbr@gmail.com
+                <a href="mailto:support@arquiv.org" className="underline underline-offset-2 hover:text-zinc-600 transition-colors">
+                  support@arquiv.org
                 </a>
               </p>
             </div>

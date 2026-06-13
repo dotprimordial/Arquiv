@@ -74,7 +74,7 @@ export default function About() {
           <ul className="space-y-2">
             <li className="flex gap-2 text-zinc-600 text-sm leading-relaxed">
               <span className="mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-zinc-300" />
-              <span>Email: <a href="mailto:seantomasytbr@gmail.com" className="underline underline-offset-2 hover:text-zinc-800 transition-colors">seantomasytbr@gmail.com</a></span>
+              <span>Email: <a href="mailto:support@arquiv.org" className="underline underline-offset-2 hover:text-zinc-800 transition-colors">support@arquiv.org</a></span>
             </li>
             <li className="flex gap-2 text-zinc-600 text-sm leading-relaxed">
               <span className="mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-zinc-300" />

@@ -65,8 +65,8 @@ export default function PrivacyPolicy() {
             </p>
             <p className="mt-4 text-xs text-zinc-400">
               Última atualização: 11 de Junho de 2026 · Contacto:{" "}
-              <a href="mailto:seantomasytbr@gmail.com" className="underline underline-offset-2 hover:text-zinc-600 transition-colors">
-                seantomasytbr@gmail.com
+              <a href="mailto:support@arquiv.org" className="underline underline-offset-2 hover:text-zinc-600 transition-colors">
+                support@arquiv.org
               </a>
             </p>
           </div>
@@ -118,7 +118,7 @@ export default function PrivacyPolicy() {
           </p>
 
           <Note>
-            <strong>Dúvidas ou preocupações?</strong> A leitura deste Aviso de Privacidade ajudá-lo-á a compreender os seus direitos de privacidade e escolhas. Se não concordar com as nossas políticas e práticas, por favor não utilize os nossos Serviços. Se ainda tiver dúvidas ou preocupações, contacte-nos através de seantomasytbr@gmail.com.
+            <strong>Dúvidas ou preocupações?</strong> A leitura deste Aviso de Privacidade ajudá-lo-á a compreender os seus direitos de privacidade e escolhas. Se não concordar com as nossas políticas e práticas, por favor não utilize os nossos Serviços. Se ainda tiver dúvidas ou preocupações, contacte-nos através de support@arquiv.org.
           </Note>
 
           {/* Mobile ToC */}
@@ -274,8 +274,8 @@ export default function PrivacyPolicy() {
             <strong>SaaSarc / arquiv</strong>
             <br />
             E-mail:{" "}
-            <a href="mailto:seantomasytbr@gmail.com" className="underline underline-offset-2">
-              seantomasytbr@gmail.com
+            <a href="mailto:support@arquiv.org" className="underline underline-offset-2">
+              support@arquiv.org
             </a>
           </Note>
 
@@ -284,7 +284,7 @@ export default function PrivacyPolicy() {
             Com base nas leis aplicáveis do seu país, tem o direito de solicitar acesso às informações pessoais que coletamos de si, alterar essas informações ou eliminá-las.
           </p>
           <Warning>
-            <strong>Eliminação de conta:</strong> Para solicitar a eliminação da sua conta e apagar permanentemente os seus dados do nosso sistema, envie um pedido de e-mail explícito para seantomasytbr@gmail.com usando o endereço de e-mail associado à sua conta. Processaremos o seu pedido e eliminaremos permanentemente os seus registos das nossas bases de dados imediatamente após a verificação.
+            <strong>Eliminação de conta:</strong> Para solicitar a eliminação da sua conta e apagar permanentemente os seus dados do nosso sistema, envie um pedido de e-mail explícito para support@arquiv.org usando o endereço de e-mail associado à sua conta. Processaremos o seu pedido e eliminaremos permanentemente os seus registos das nossas bases de dados imediatamente após a verificação.
           </Warning>
 
           {/* Footer bar */}
@@ -293,8 +293,8 @@ export default function PrivacyPolicy() {
               <p className="text-xs text-zinc-400">Última atualização: 11 de Junho de 2026</p>
               <p className="text-xs text-zinc-400">
                 Contacto:{" "}
-                <a href="mailto:seantomasytbr@gmail.com" className="underline underline-offset-2 hover:text-zinc-600 transition-colors">
-                  seantomasytbr@gmail.com
+                <a href="mailto:support@arquiv.org" className="underline underline-offset-2 hover:text-zinc-600 transition-colors">
+                  support@arquiv.org
                 </a>
               </p>
             </div>

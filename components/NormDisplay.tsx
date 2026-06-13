@@ -305,9 +305,6 @@ function NormDisplay({
                     )}
                   </div>
                 </div>
-                <div className="hidden sm:block">
-                  <ChevronDown className="w-5 h-5 text-zinc-300 group-hover:text-zinc-900 transition-colors mt-1" />
-                </div>
               </div>
             </div>
           </div>
