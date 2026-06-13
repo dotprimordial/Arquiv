@@ -2,6 +2,7 @@
 
 import OpenRouterClient, { OpenRouterMessage } from "@/lib/openrouter";
 import { searchNormsSemantic } from "./norm-actions";
+import { isValidTextInput } from "@/lib/search-utils";
 
 const apiKey = process.env.OPENROUTER_API_KEY || "";
 
@@ -9,6 +10,11 @@ export async function chatWithNormAssistant(
   userMessage: string,
   country?: string
 ) {
+  if (!isValidTextInput(userMessage)) {
+    console.warn('[chatWithNormAssistant] Input rejeitado: não é texto válido');
+    return { success: false, error: "Mensagem inválida." };
+  }
+
   try {
     // Step 1: Search for relevant norms using existing semantic search
     let relevantContext = "";

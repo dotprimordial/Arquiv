@@ -106,22 +106,19 @@ export async function logoutAction() {
 export async function getSessionAction() {
   try {
     const supabase = await getAuthenticatedSupabaseClient();
-    const { data: { session }, error } = await supabase.auth.getSession();
+    const { data: { user }, error } = await supabase.auth.getUser();
 
-    if (error || !session) {
-      return { success: false, session: null, user: null, isAdmin: false };
+    if (error || !user) {
+      return { success: false, user: null, isAdmin: false };
     }
-
-    const { data: { user } } = await supabase.auth.getUser();
 
     return { 
       success: true, 
-      session, 
       user,
       isAdmin: user?.email === ADMIN_EMAIL 
     };
   } catch (err) {
     console.error('[getSessionAction] Error:', err);
-    return { success: false, session: null, user: null, isAdmin: false };
+    return { success: false, user: null, isAdmin: false };
   }
 }

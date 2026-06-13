@@ -7,7 +7,7 @@ import { chunkDocument, generateSectionEmbeddings, EmbeddingClient, splitContent
 import { checkRateLimit, recordSearch } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import OpenRouterClient, { OpenRouterMessage } from '@/lib/openrouter';
-import { processSearchQuery, interpretUserQuery, removeAccents } from '@/lib/search-utils';
+import { processSearchQuery, interpretUserQuery, removeAccents, generateVariants, anyVariantMatches, isValidTextInput } from '@/lib/search-utils';
 
 const apiKey = process.env.OPENROUTER_API_KEY || '';
 
@@ -43,6 +43,14 @@ export async function analyzeDocumentStructureServer(
   content: string,
   title: string
 ): Promise<DocumentStructureResult> {
+  if (!isValidTextInput(content)) {
+    console.warn('[analyzeDocumentStructureServer] Input rejeitado: conteúdo não é texto válido');
+    return { structuredContent: content, categories: [], keywords: [], sections: [] };
+  }
+  if (!isValidTextInput(title)) {
+    console.warn('[analyzeDocumentStructureServer] Input rejeitado: título não é texto válido');
+    return { structuredContent: content, categories: [], keywords: [], sections: [] };
+  }
   if (isInvalidKey(apiKey)) {
     console.warn('[analyzeDocumentStructureServer] API Key não configurada, retornando resultado vazio');
     return {
@@ -419,10 +427,13 @@ INSTRUÇÕES:
           });
 
         if (sectionError) {
-          console.error(`[processAndUploadNorm] Failed to insert chunk ${i}:`, sectionError);
+          console.error(`[processAndUploadNorm] Failed to insert chunk ${i}: message=${sectionError.message}, code=${sectionError.code}, details=${sectionError.details}, hint=${sectionError.hint}`);
+          if (chunk.embedding) {
+            console.error(`[processAndUploadNorm] embedding length: ${chunk.embedding.length}, type: ${typeof chunk.embedding}, first: ${chunk.embedding[0]}`);
+          }
           // Cleanup and abort
           await supabaseWrite.from('norms').delete().eq('id', normId);
-          throw new Error('Falha ao salvar sections no banco. Upload cancelado.');
+          throw new Error(`Falha ao salvar sections no banco: ${sectionError.message}. Upload cancelado.`);
         } else {
           sectionsCreated++;
         }
@@ -459,9 +470,138 @@ INSTRUÇÕES:
       sectionsCreated,
       embeddingsGenerated,
     };
-  } catch {
-    console.error('[processAndUploadNorm] Ocorreu um erro interno ao processar a norma');
-    throw new Error('Erro interno ao processar a norma');
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[processAndUploadNorm] Erro interno:', msg);
+    if (err instanceof Error && err.stack) {
+      console.error('[processAndUploadNorm] Stack:', err.stack);
+    }
+    throw new Error(msg || 'Erro interno ao processar a norma');
+  }
+}
+
+export async function reprocessNormSectionsAction(normId: string) {
+  try {
+    const apiKey = process.env.OPENROUTER_API_KEY || '';
+    if (!apiKey || apiKey.length <= 10) {
+      return { success: false, error: 'OPENROUTER_API_KEY não configurada' };
+    }
+
+    const supabaseWrite = getAdminSupabaseClient();
+
+    const { data: norm, error: normError } = await supabaseWrite
+      .from('norms')
+      .select('id, content, code, title')
+      .eq('id', normId)
+      .single();
+
+    if (normError || !norm) {
+      return { success: false, error: 'Norma não encontrada: ' + (normError?.message || 'not found') };
+    }
+
+    const contentToProcess = norm.content || '';
+    if (!contentToProcess || contentToProcess.length <= 100) {
+      return { success: false, error: 'Conteúdo insuficiente (menos de 100 caracteres)' };
+    }
+
+    // Delete existing sections
+    const { error: deleteError } = await supabaseWrite
+      .from('norm_sections')
+      .delete()
+      .eq('norm_id', normId);
+
+    if (deleteError) {
+      console.error('[reprocessNormSections] Erro ao limpar sections antigas:', deleteError);
+      return { success: false, error: 'Erro ao limpar sections antigas: ' + deleteError.message };
+    }
+
+    // Step 1: Split into articles
+    const articles = splitContentIntoArticles(contentToProcess);
+    console.log(`[reprocessNormSections] ${norm.code}: ${articles.length} artigos extraídos`);
+
+    const sectionsForChunking = articles.map((a, idx) => ({
+      sectionType: 'artigo' as const,
+      sectionNumber: String(a.index || idx + 1),
+      sectionTitle: undefined,
+      content: a.text,
+      orderIndex: idx,
+      pageNumber: undefined,
+    }));
+
+    // Step 2: Insert parent article rows
+    const parentInserts = sectionsForChunking.map((s) => ({
+      norm_id: normId,
+      section_type: s.sectionType,
+      section_number: s.sectionNumber,
+      section_title: s.sectionTitle,
+      content: s.content,
+      content_raw: s.content,
+      parent_section_id: null,
+      embedding: null,
+      order_index: s.orderIndex,
+    }));
+
+    const { data: parentRows, error: parentError } = await supabaseWrite
+      .from('norm_sections')
+      .insert(parentInserts)
+      .select('id');
+
+    if (parentError || !parentRows) {
+      console.error('[reprocessNormSections] Erro ao inserir artigos-pai:', parentError);
+      return { success: false, error: 'Falha ao salvar artigos-pai: ' + (parentError?.message || 'unknown') };
+    }
+
+    const parentIds = parentRows.map((r: { id: string | number }) => r.id);
+
+    // Step 3: Chunk articles
+    const chunks = chunkDocument(sectionsForChunking, 5000);
+    console.log(`[reprocessNormSections] ${norm.code}: ${chunks.length} chunks criados`);
+
+    // Step 4: Generate embeddings
+    const chunksWithEmbeddings = await generateSectionEmbeddings(chunks, apiKey);
+    console.log(`[reprocessNormSections] ${norm.code}: ${chunksWithEmbeddings.length} embeddings gerados`);
+
+    // Step 5: Insert chunks
+    let sectionsCreated = 0;
+    for (let i = 0; i < chunksWithEmbeddings.length; i++) {
+      const chunk = chunksWithEmbeddings[i];
+      const secNumRoot = String(chunk.sectionNumber || '').split('-')[0] || '';
+      const parentIndex = secNumRoot ? Math.max(0, Number(secNumRoot) - 1) : null;
+      const parentId = parentIndex !== null && parentIds[parentIndex] ? parentIds[parentIndex] : null;
+
+      const { error: sectionError } = await supabaseWrite
+        .from('norm_sections')
+        .insert({
+          norm_id: normId,
+          section_type: chunk.sectionType,
+          section_number: chunk.sectionNumber,
+          section_title: chunk.sectionTitle,
+          content: chunk.content,
+          content_raw: chunk.content,
+          parent_section_id: parentId,
+          embedding: chunk.embedding,
+          order_index: i,
+        });
+
+      if (sectionError) {
+        console.error(`[reprocessNormSections] Erro ao inserir chunk ${i}:`, sectionError);
+        return { success: false, error: 'Falha ao salvar section: ' + sectionError.message };
+      }
+      sectionsCreated++;
+    }
+
+    // Step 6: Update total_sections
+    await supabaseWrite
+      .from('norms')
+      .update({ total_sections: sectionsCreated })
+      .eq('id', normId);
+
+    console.log(`[reprocessNormSections] ${norm.code}: ✓ ${sectionsCreated} sections`);
+    return { success: true, sectionsCreated, embeddingsGenerated: chunksWithEmbeddings.length };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[reprocessNormSections] Erro interno:', msg);
+    return { success: false, error: msg || 'Erro interno ao regenerar sections' };
   }
 }
 
@@ -707,31 +847,43 @@ function extractBestSnippet(content: string, query: string, maxLen: number = 600
     ]);
     
     // Filter out stop words and very short terms, normalize all (remove accents)
-    const allTerms = [...qTerms, ...expandedTerms]
+    const baseTerms = [...qTerms, ...expandedTerms]
       .map(t => removeAccents(t))
       .filter(t => t.length >= 3)
       .filter(t => !STOP_WORDS.has(t));
 
-    console.log('[extractBestSnippet] Search terms (filtered, normalized, no stop words):', allTerms.slice(0, 10));
+    // Build variant map for each term
+    const termVariants = new Map<string, string[]>();
+    for (const t of baseTerms) {
+      termVariants.set(t, generateVariants(t));
+    }
+
+    const allVariants = new Set(baseTerms);
+    for (const variants of termVariants.values()) {
+      for (const v of variants) allVariants.add(v);
+    }
+
+    console.log('[extractBestSnippet] Search terms (filtered, normalized, no stop words):', baseTerms.slice(0, 10));
 
     // Normalize content for matching
     const normalizedClean = removeAccents(clean);
 
-    // Find ALL term occurrences and select the window with the most matches (best coverage)
+    // Find ALL variant occurrences and select the window with the most matches (best coverage)
     const matchPositions: number[] = [];
-    for (const term of allTerms) {
+    for (const variant of allVariants) {
+      if (variant.length < 3) continue;
       let searchFrom = 0;
       while (searchFrom < normalizedClean.length) {
-        const i = normalizedClean.indexOf(term, searchFrom);
+        const i = normalizedClean.indexOf(variant, searchFrom);
         if (i === -1) break;
         matchPositions.push(i);
-        searchFrom = i + term.length;
+        searchFrom = i + variant.length;
       }
     }
 
     // If not found, return empty
     if (matchPositions.length === 0) {
-      console.log('[extractBestSnippet] No match found for terms:', allTerms.slice(0, 5));
+      console.log('[extractBestSnippet] No match found for terms:', baseTerms.slice(0, 5));
       return '';
     }
 
@@ -801,25 +953,37 @@ function extractAllSnippets(content: string, query: string, maxLen: number = 400
     'deve', 'ser',
   ]);
 
-  const allTerms = [...qTerms, ...expandedTerms]
+  const baseTerms = [...qTerms, ...expandedTerms]
     .map(t => removeAccents(t))
     .filter(t => t.length >= 3)
     .filter(t => !STOP_WORDS.has(t));
 
-  if (allTerms.length === 0) return [];
+  if (baseTerms.length === 0) return [];
+
+  // Build variant map for each term
+  const termVariants = new Map<string, string[]>();
+  for (const t of baseTerms) {
+    termVariants.set(t, generateVariants(t));
+  }
+
+  const allVariants = new Set(baseTerms);
+  for (const variants of termVariants.values()) {
+    for (const v of variants) allVariants.add(v);
+  }
 
   const normalizedClean = removeAccents(clean);
   const half = Math.floor(maxLen / 2);
 
-  // Collect all match positions for every term
+  // Collect all match positions for every variant
   const matchPositions: number[] = [];
-  for (const term of allTerms) {
+  for (const variant of allVariants) {
+    if (variant.length < 3) continue;
     let searchFrom = 0;
     while (searchFrom < normalizedClean.length) {
-      const idx = normalizedClean.indexOf(term, searchFrom);
+      const idx = normalizedClean.indexOf(variant, searchFrom);
       if (idx === -1) break;
       matchPositions.push(idx);
-      searchFrom = idx + term.length;
+      searchFrom = idx + variant.length;
     }
   }
 
@@ -1021,7 +1185,10 @@ export async function searchNormsSemantic(
   country?: string,
   limit: number = 10
 ): Promise<SearchResult[]> {
-  console.log('[searchNormsSemantic] Iniciando busca com IA:', { query, country, limit });
+  if (!isValidTextInput(query)) {
+    console.warn('[searchNormsSemantic] Input rejeitado: não é texto válido');
+    return [];
+  }
 
   // Analyze query intent to improve semantic understanding
   const queryInterpretation = await interpretUserQuery(query, apiKey);
@@ -1143,7 +1310,7 @@ export async function searchNormsSemantic(
       .from('norm_sections')
       .select('id, norm_id, section_type, section_number, section_title, content, embedding, parent_section_id')
       .not('embedding', 'is', null)
-      .limit(200);
+      .limit(1000);
     if (allowedNormIds && allowedNormIds.length > 0) {
       sectionsQuery = sectionsQuery.in('norm_id', allowedNormIds);
     }
@@ -1202,6 +1369,12 @@ export async function searchNormsSemantic(
           .filter(t => t.length >= 3)
       );
 
+      // Pre-generate morphological variants for all search tokens
+      const searchTokenVariants = new Map<string, string[]>();
+      for (const token of normalizedSearchTokens) {
+        searchTokenVariants.set(token, generateVariants(token));
+      }
+
       const scored = vectorSections
         .map((s) => {
           const emb = parseEmbedding(s.embedding);
@@ -1210,17 +1383,20 @@ export async function searchNormsSemantic(
           // Calculate semantic similarity
           const similarity = cosineSim(emb, queryEmbedding);
 
-          // Calculate keyword matching score for hybrid ranking
+          // Calculate keyword matching score with morphological variants
           const sectionText = cleanHtmlFormatting(String(s.content || '') + ' ' + String(s.section_title || ''));
           const normalizedSectionText = removeAccents(sectionText);
           let keywordMatches = 0;
           const foundKeywords = new Set<string>();
 
-          for (const term of normalizedSearchTokens) {
-            if (normalizedSectionText.includes(term) && !foundKeywords.has(term)) {
-              foundKeywords.add(term);
-              // Weight longer keywords more heavily
-              keywordMatches += term.length >= 6 ? 0.15 : 0.08;
+          for (const [term, variants] of searchTokenVariants) {
+            if (foundKeywords.has(term)) continue;
+            for (const v of variants) {
+              if (normalizedSectionText.includes(v)) {
+                foundKeywords.add(term);
+                keywordMatches += term.length >= 6 ? 0.15 : 0.08;
+                break;
+              }
             }
           }
 
@@ -1229,16 +1405,7 @@ export async function searchNormsSemantic(
 
           return { section: s, similarity: finalScore, rawSimilarity: similarity, keywordScore: keywordMatches };
         })
-        .filter((r): r is NonNullable<typeof r> => r !== null && r.rawSimilarity >= 0.4)
-        .filter(({ section }) => {
-          const sectionText = cleanHtmlFormatting(String(section.content || '') + ' ' + String(section.section_title || ''));
-          const normalizedSectionText = removeAccents(sectionText);
-          if (!normalizedSectionText) return false;
-          for (const t of normalizedSearchTokens) {
-            if (normalizedSectionText.includes(t)) return true;
-          }
-          return false;
-        })
+        .filter((r): r is NonNullable<typeof r> => r !== null && r.rawSimilarity >= 0.35)
         .sort((a, b) => b.similarity - a.similarity)
         .slice(0, limit);
 
@@ -1513,7 +1680,7 @@ Retorne neste formato:
       const normalized = removeAccents(cleanText);
       if (!normalized || normalized.trim().length < 80) return false;
 
-      const hasAnyExpandedTerm = Array.from(expandedTerms).some((t) => normalized.includes(t));
+      const hasAnyExpandedTerm = Array.from(expandedTerms).some((t) => anyVariantMatches(t, normalized));
       const hasNormativeSignal = normativeRegex.test(cleanText);
       const hasAdminNoise = adminNoiseRegex.test(cleanText);
       const hasNumber = /\d/.test(normalized);
@@ -1541,7 +1708,7 @@ Retorne neste formato:
       let score = 0;
 
       for (const term of expandedTerms) {
-        if (normalized.includes(term)) {
+        if (anyVariantMatches(term, normalized)) {
           score += 4;
           if (hits.length < 8) hits.push(term);
         }
@@ -1689,7 +1856,7 @@ Retorne neste formato:
       }
 
       for (const term of searchTerms) {
-        if (cleanExcerpt.includes(term)) return true;
+        if (anyVariantMatches(term, cleanExcerpt)) return true;
       }
       return false;
     }
@@ -2118,20 +2285,23 @@ async function fallbackTextualSearch(norms: Array<Record<string, unknown>>, quer
     const content = cleanHtmlFormatting(String(norm.content || '')).toLowerCase();
     const keywords = ((norm.keywords as string[]) || []).map(k => k.toLowerCase());
     
-    // Original query matching (higher weight)
-    if (code.includes(queryLower)) score += 10;
-    if (title.includes(queryLower)) score += 8;
-    if (description.includes(queryLower)) score += 4;
-    if (content.includes(queryLower)) score += 3;
-    if (keywords.some(k => k.includes(queryLower))) score += 5;
+    // Original query matching (higher weight) — with morphological variants
+    const queryVariants = generateVariants(removeAccents(queryLower));
+    if (queryVariants.some(v => code.includes(v))) score += 10;
+    if (queryVariants.some(v => title.includes(v))) score += 8;
+    if (queryVariants.some(v => description.includes(v))) score += 4;
+    if (queryVariants.some(v => content.includes(v))) score += 3;
+    if (keywords.some(k => queryVariants.some(v => k.includes(v)))) score += 5;
     
     // Expanded tokens matching (lower weight but helps with semantic matching)
     searchTokens.forEach((token: string) => {
-      if (code.includes(token)) score += 5;
-      if (title.includes(token)) score += 4;
-      if (description.includes(token)) score += 2;
-      if (content.includes(token)) score += 1.5;
-      if (keywords.some(k => k.includes(token))) score += 3;
+      const tokenNormalized = removeAccents(token);
+      const variants = generateVariants(tokenNormalized);
+      if (variants.some(v => code.includes(v))) score += 5;
+      if (variants.some(v => title.includes(v))) score += 4;
+      if (variants.some(v => description.includes(v))) score += 2;
+      if (variants.some(v => content.includes(v))) score += 1.5;
+      if (keywords.some(k => variants.some(v => k.includes(v)))) score += 3;
     });
     
     return { norm, score };

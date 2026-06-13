@@ -43,6 +43,7 @@ export default function UploadPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [autoCategories, setAutoCategories] = useState<string[]>([]);
+  const [submitState, setSubmitState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   const router = useRouter();
 
@@ -78,7 +79,7 @@ export default function UploadPage() {
   useEffect(() => {
     const checkAuth = async () => {
       const res = await getSessionAction();
-      if (!res.success || !res.session) {
+      if (!res.success || !res.user) {
         router.push('/login');
         return;
       }
@@ -264,7 +265,8 @@ export default function UploadPage() {
       return;
     }
 
-    setIsLoading(true);
+    if (submitState === 'loading') return;
+    setSubmitState('loading');
     setError(null);
 
     // Analisar documento automaticamente antes do upload (se ainda não foi analisado)
@@ -305,15 +307,18 @@ export default function UploadPage() {
         description: `Seções: ${result?.sectionsCreated ?? 0} | Embeddings: ${result?.embeddingsGenerated ?? 0}`,
       });
 
-      router.push('/');
+      setSubmitState('success');
+      setTimeout(() => {
+        router.push('/');
+      }, 800);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao salvar norma. Por favor tente novamente.';
       setError(msg);
+      setSubmitState('error');
       toast.error('Erro ao salvar norma', {
         description: msg,
       });
-    } finally {
-      setIsLoading(false);
+      setTimeout(() => setSubmitState('idle'), 3000);
     }
   };
 
@@ -402,7 +407,7 @@ export default function UploadPage() {
     );
   }
 
-  const isButtonDisabled = isLoading || 
+  const isButtonDisabled = submitState === 'loading' || isLoading ||
     (contentType === 'text' && !normContent.replace(/<(.|\n)*?>/g, '').trim()) ||
     (contentType === 'pdf' && !pdfUrl) ||
     (contentType === 'docx' && !docxFile);
@@ -708,13 +713,29 @@ export default function UploadPage() {
               <button
                 type="submit"
                 disabled={isButtonDisabled}
-                className="w-full py-4 xs:py-5 bg-zinc-900 text-white rounded-2xl font-bold text-base xs:text-lg flex items-center justify-center gap-3 hover:bg-zinc-800 transition-all disabled:opacity-50 shadow-xl shadow-zinc-200"
+                className={`w-full py-4 xs:py-5 rounded-2xl font-bold text-base xs:text-lg flex items-center justify-center gap-3 transition-all disabled:opacity-50 shadow-xl shadow-zinc-200 ${
+                  submitState === 'success'
+                    ? 'bg-emerald-600 text-white'
+                    : submitState === 'error'
+                    ? 'bg-red-500 text-white'
+                    : 'bg-zinc-900 text-white hover:bg-zinc-800'
+                }`}
               >
-                {isLoading ? (
+                {submitState === 'loading' ? (
                   <>
                     <Loader2 className="w-5 xs:w-6 h-5 xs:h-6 animate-spin" />
                     <span className="hidden xs:inline">A Guardar Norma...</span>
                     <span className="inline xs:hidden">Guardando...</span>
+                  </>
+                ) : submitState === 'success' ? (
+                  <>
+                    <svg className="w-5 xs:w-6 h-5 xs:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    <span>Publicado!</span>
+                  </>
+                ) : submitState === 'error' ? (
+                  <>
+                    <AlertCircle className="w-5 xs:w-6 h-5 xs:h-6" />
+                    <span>Erro ao Publicar</span>
                   </>
                 ) : (
                   <>

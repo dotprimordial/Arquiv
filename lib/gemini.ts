@@ -2,7 +2,7 @@
 
 import OpenRouterClient, { OpenRouterMessage } from "./openrouter";
 import { getAuthenticatedSupabaseClient } from "./supabase-server";
-import { processSearchQuery, calculateSearchScore } from './search-utils';
+import { processSearchQuery, calculateSearchScore, isValidTextInput } from './search-utils';
 
 // Prefer server-side key. Avoid exposing API keys to client bundles.
 const apiKey = (typeof window === 'undefined')
@@ -85,6 +85,11 @@ export const getArchitecturalNorms = async (
   }
 
   console.log(`[getArchitecturalNorms] Iniciando busca: ${country}, categoria: ${category}, query: "${queryText}", page: ${page}, pageSize: ${pageSize}`);
+
+  if (queryText && !isValidTextInput(queryText)) {
+    console.warn('[getArchitecturalNorms] Input rejeitado: query não é texto válido');
+    return { norms: [], totalCount: 0 };
+  }
 
   if (!country || country.trim() === '') {
     console.warn('[getArchitecturalNorms] País inválido ou não informado, retornando lista vazia.');

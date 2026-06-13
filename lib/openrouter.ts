@@ -59,14 +59,8 @@ export class OpenRouterClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("OpenRouter API Error:", {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText,
-          apiKeyPresent: !!this.apiKey,
-        });
-        throw new Error(`OpenRouter API error: ${response.status} - ${response.statusText} - ${errorText.substring(0, 200)}`);
+        console.error("OpenRouter API Error:", { status: response.status, apiKeyPresent: !!this.apiKey });
+        throw new Error(`OpenRouter API error: ${response.status}`);
       }
 
       return response.json();

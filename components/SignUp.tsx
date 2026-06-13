@@ -1,66 +1,42 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Mail, Lock, UserPlus } from 'lucide-react';
+import React from 'react';
+import { Mail, Lock, UserPlus, Check, AlertCircle } from 'lucide-react';
 import { GoogleIcon } from './ui/google-icon';
 import { signUpAction, getGoogleOAuthUrlAction } from '@/app/actions/auth-actions';
 import { useRouter } from 'next/navigation';
+import { useAsyncAction } from '@/hooks/use-async-action';
 
 export default function SignUp({ onToggle, onClose }: { onToggle: () => void; onClose?: () => void }) {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
 
-  const handleGoogleSignIn = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await getGoogleOAuthUrlAction();
-      if (!res.success || !res.url) {
-        throw new Error(res.error || 'Não foi possível obter URL do Google OAuth.');
-      }
-      window.location.href = res.url;
-    } catch (err: unknown) {
-      console.error('[SignUp Google] Error:', err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      if (errorMessage.includes('Failed to fetch')) {
-        setError('Erro de ligação ao serviço. Tente novamente mais tarde.');
-      } else {
-        setError('Não foi possível registar com o Google neste momento.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    try {
+  const signupActionHook = useAsyncAction(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
       const res = await signUpAction(email, password);
-      
-      if (!res.success) {
-        throw new Error(res.error || 'Erro ao efetuar registo.');
-      }
-      
-      // If res.session is null, email confirmation might be required
+      if (!res.success) throw new Error(res.error || 'Erro ao efetuar registo.');
       if (!res.session) {
-        // Redirect to sign in page with pre-fill and success message
         router.push(`/login?email=${encodeURIComponent(email)}&signup=success`);
-        onToggle(); // Switch to sign in view
+        onToggle();
       } else {
         if (onClose) onClose();
         window.location.reload();
       }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return res;
+    },
+    { errorDuration: 4000 }
+  );
+
+  const googleAction = useAsyncAction(
+    async () => {
+      const res = await getGoogleOAuthUrlAction();
+      if (!res.success || !res.url) throw new Error(res.error || 'Não foi possível obter URL do Google OAuth.');
+      window.location.href = res.url;
+    },
+    { errorDuration: 4000 }
+  );
 
   return (
     <div className="p-8 md:p-10">
@@ -73,7 +49,7 @@ export default function SignUp({ onToggle, onClose }: { onToggle: () => void; on
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={signupActionHook.execute as unknown as React.FormEventHandler} className="space-y-4">
         <div className="space-y-1">
           <label className="text-xs font-bold uppercase tracking-widest text-zinc-400 ml-1">Email</label>
           <div className="relative">
@@ -104,24 +80,30 @@ export default function SignUp({ onToggle, onClose }: { onToggle: () => void; on
           </div>
         </div>
 
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-medium">
-            {error}
+        {signupActionHook.isError && (
+          <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-medium flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {signupActionHook.error}
           </div>
         )}
 
         <button
           type="submit"
-          disabled={isLoading}
-          className="w-full py-4 bg-zinc-900 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all disabled:opacity-50"
+          disabled={signupActionHook.isLoading}
+          className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 ${
+            signupActionHook.isSuccess
+              ? 'bg-emerald-600 text-white'
+              : signupActionHook.isError
+              ? 'bg-red-500 text-white'
+              : 'bg-zinc-900 text-white hover:bg-zinc-800'
+          }`}
         >
-          {isLoading ? (
+          {signupActionHook.isLoading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : signupActionHook.isSuccess ? (
+            <><Check className="w-5 h-5" /> Registado</>
           ) : (
-            <>
-              <UserPlus className="w-5 h-5" />
-              Registar
-            </>
+            <><UserPlus className="w-5 h-5" /> Registar</>
           )}
         </button>
       </form>
@@ -135,13 +117,31 @@ export default function SignUp({ onToggle, onClose }: { onToggle: () => void; on
         </div>
       </div>
 
+      {googleAction.isError && (
+        <div className="mb-3 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-medium flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {googleAction.error}
+        </div>
+      )}
+
       <button
-        onClick={handleGoogleSignIn}
-        disabled={isLoading}
-        className="w-full py-4 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-zinc-50 transition-all"
+        onClick={() => googleAction.execute()}
+        disabled={googleAction.isLoading}
+        className={`w-full py-4 border rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 ${
+          googleAction.isSuccess
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            : googleAction.isError
+            ? 'bg-red-50 border-red-200 text-red-600'
+            : 'bg-white border-zinc-200 text-zinc-900 hover:bg-zinc-50'
+        }`}
       >
-        <GoogleIcon className="w-5 h-5" />
-        Google
+        {googleAction.isLoading ? (
+          <div className="w-5 h-5 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin" />
+        ) : googleAction.isSuccess ? (
+          <><Check className="w-5 h-5" /> Google</>
+        ) : (
+          <><GoogleIcon className="w-5 h-5" /> Google</>
+        )}
       </button>
 
       <p className="text-center mt-8 text-sm text-zinc-500">

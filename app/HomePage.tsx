@@ -2,7 +2,7 @@
 
 import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { LogIn, LogOut, Upload as UploadIcon, User, ShieldCheck } from 'lucide-react';
+import { LogIn, LogOut, Upload as UploadIcon, User, ShieldCheck, Loader2, Check } from 'lucide-react';
 import Image from 'next/image';
 import CountrySelector, { Country, countries } from '@/components/CountrySelector';
 import { ActionSearchBar } from '@/components/ui/action-search-bar';
@@ -90,7 +90,7 @@ export default function HomePage() {
       (async () => {
         try {
           const res = await getSessionAction();
-          if (res.success && res.session) {
+          if (res.success && res.user) {
             setUser(res.user as unknown as SupabaseUser);
             setIsAdmin(res.isAdmin);
           }
@@ -296,14 +296,21 @@ export default function HomePage() {
     }
   };
 
+  const [logoutState, setLogoutState] = useState<'idle' | 'loading' | 'success'>('idle');
   const handleLogout = async () => {
+    if (logoutState === 'loading') return;
+    setLogoutState('loading');
     try {
       await logoutAction();
-      setUser(null);
-      setIsAdmin(false);
-      window.location.reload();
+      setLogoutState('success');
+      setTimeout(() => {
+        setUser(null);
+        setIsAdmin(false);
+        window.location.reload();
+      }, 500);
     } catch (err) {
       console.error('Logout error:', err);
+      setLogoutState('idle');
     }
   };
 
@@ -443,10 +450,19 @@ export default function HomePage() {
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="p-2 text-zinc-400 hover:text-red-600 transition-colors"
+                  disabled={logoutState !== 'idle'}
+                  className={`p-2 transition-colors ${
+                    logoutState === 'success' ? 'text-emerald-500' : 'text-zinc-400 hover:text-red-600'
+                  }`}
                   title="Sair"
                 >
-                  <LogOut className="w-5 h-5" />
+                  {logoutState === 'loading' ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : logoutState === 'success' ? (
+                    <Check className="w-5 h-5" />
+                  ) : (
+                    <LogOut className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             ) : (

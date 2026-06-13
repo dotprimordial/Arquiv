@@ -1,102 +1,43 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Mail, Lock, LogIn } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { Mail, Lock, LogIn, Check, AlertCircle } from 'lucide-react';
 import { GoogleIcon } from './ui/google-icon';
 import { loginAction } from '@/app/actions/auth-actions';
 import { useSearchParams } from 'next/navigation';
+import { useAsyncAction } from '@/hooks/use-async-action';
 
 export default function SignIn({ onToggle, onClose }: { onToggle: () => void; onClose?: () => void }) {
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+
+  const loginActionHook = useAsyncAction(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      const res = await loginAction(email, password);
+      if (!res.success) throw new Error(res.error || 'Credenciais inválidas.');
+      if (!res.session) throw new Error('Sessão não iniciada. Verifique o seu email.');
+      if (onClose) onClose();
+      window.location.reload();
+      return res;
+    },
+    { errorDuration: 4000 }
+  );
+
+  const googleAction = useAsyncAction(
+    async () => {
+      const res = await fetch('/api/auth/google-url', { method: 'POST' }).then(r => r.json());
+      if (!res.success || !res.url) throw new Error(res.error || 'Não foi possível obter URL do Google OAuth.');
+      window.location.href = res.url;
+    },
+    { errorDuration: 4000 }
+  );
 
   useEffect(() => {
     const emailParam = searchParams.get('email');
-    const signupParam = searchParams.get('signup');
-    
-    if (emailParam) {
-      setEmail(emailParam);
-    }
-    
-    if (signupParam === 'success') {
-      setSuccessMessage('A sua conta foi criada. Por favor, verifique o seu email antes de entrar.');
-    }
+    if (emailParam) setEmail(emailParam);
   }, [searchParams]);
-
-  const handleGoogleSignIn = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      const res = await fetch('/api/auth/google-url', { method: 'POST' }).then(r => r.json());
-      if (!res.success || !res.url) {
-        throw new Error(res.error || 'Não foi possível obter URL do Google OAuth.');
-      }
-      window.location.href = res.url;
-    } catch (err: unknown) {
-      console.error('[SignIn Google] Error:', err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-
-      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
-        setError('Não foi possível contactar o serviço de autenticação. Verifique a sua ligação.');
-      } else {
-        setError('Não foi possível entrar com o Google. Por favor, tente novamente.');
-      }
-      setIsLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    setSuccessMessage(null);
-    try {
-      const res = await loginAction(email, password);
-      
-      if (!res.success) {
-        throw new Error(res.error || 'Credenciais inválidas.');
-      }
-      
-      if (res.session) {
-        // Fechar modal antes de redirecionar
-        if (onClose) onClose();
-        window.location.reload();
-      } else {
-        setError('Sessão não iniciada. Verifique o seu email.');
-      }
-    } catch (err: unknown) {
-      console.error('[SignIn] Error:', err);
-      
-      // Get error name and message
-      const errorName = err instanceof Error ? err.name : '';
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      
-      // Handle specific error types
-      if (errorName === 'AuthRetryableFetchError' || errorMessage.includes('Failed to fetch')) {
-        setError('Não foi possível ligar ao serviço. Verifique a sua ligação à internet.');
-      } else if (err instanceof Error) {
-        // Check for common Supabase auth errors
-        const message = errorMessage.toLowerCase();
-        if (message.includes('invalid login credentials') || message.includes('credentials') || message.includes('password')) {
-          setError('Email ou palavra-passe incorretos.');
-        } else if (message.includes('email not confirmed')) {
-          setError('A sua conta ainda não foi confirmada. Verifique o seu email.');
-        } else if (message.includes('rate limit')) {
-          setError('Muitas tentativas. Aguarde alguns minutos.');
-        } else {
-          setError(errorMessage);
-        }
-      } else {
-        setError('Ocorreu um erro inesperado. Tente novamente.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <div className="p-8 md:p-10">
@@ -109,13 +50,13 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
         </p>
       </div>
 
-      {successMessage && (
+      {searchParams.get('signup') === 'success' && (
         <div className="mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-sm font-medium">
-          {successMessage}
+          A sua conta foi criada. Por favor, verifique o seu email antes de entrar.
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={loginActionHook.execute as unknown as React.FormEventHandler} className="space-y-4">
         <div className="space-y-1">
           <label className="text-xs font-bold uppercase tracking-widest text-zinc-400 ml-1">Email</label>
           <div className="relative">
@@ -146,24 +87,30 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
           </div>
         </div>
 
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-medium">
-            {error}
+        {loginActionHook.isError && (
+          <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-medium flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {loginActionHook.error}
           </div>
         )}
 
         <button
           type="submit"
-          disabled={isLoading}
-          className="w-full py-4 bg-zinc-900 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all disabled:opacity-50"
+          disabled={loginActionHook.isLoading}
+          className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 ${
+            loginActionHook.isSuccess
+              ? 'bg-emerald-600 text-white'
+              : loginActionHook.isError
+              ? 'bg-red-500 text-white'
+              : 'bg-zinc-900 text-white hover:bg-zinc-800'
+          }`}
         >
-          {isLoading ? (
+          {loginActionHook.isLoading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : loginActionHook.isSuccess ? (
+            <><Check className="w-5 h-5" /> Entrou</>
           ) : (
-            <>
-              <LogIn className="w-5 h-5" />
-              Entrar
-            </>
+            <><LogIn className="w-5 h-5" /> Entrar</>
           )}
         </button>
       </form>
@@ -177,13 +124,31 @@ export default function SignIn({ onToggle, onClose }: { onToggle: () => void; on
         </div>
       </div>
 
+      {googleAction.isError && (
+        <div className="mb-3 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-medium flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {googleAction.error}
+        </div>
+      )}
+
       <button
-        onClick={handleGoogleSignIn}
-        disabled={isLoading}
-        className="w-full py-4 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-zinc-50 transition-all"
+        onClick={() => googleAction.execute()}
+        disabled={googleAction.isLoading}
+        className={`w-full py-4 border rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 ${
+          googleAction.isSuccess
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            : googleAction.isError
+            ? 'bg-red-50 border-red-200 text-red-600'
+            : 'bg-white border-zinc-200 text-zinc-900 hover:bg-zinc-50'
+        }`}
       >
-        <GoogleIcon className="w-5 h-5" />
-        Google
+        {googleAction.isLoading ? (
+          <div className="w-5 h-5 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin" />
+        ) : googleAction.isSuccess ? (
+          <><Check className="w-5 h-5" /> Google</>
+        ) : (
+          <><GoogleIcon className="w-5 h-5" /> Google</>
+        )}
       </button>
 
       <p className="text-center mt-8 text-sm text-zinc-500">

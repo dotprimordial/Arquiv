@@ -34,9 +34,23 @@ export default function UpdateDescriptionsPage() {
           <button
             onClick={handleUpdate}
             disabled={status === 'loading'}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className={`px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 ${
+              status === 'success'
+                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                : status === 'error'
+                ? 'bg-red-500 text-white hover:bg-red-600'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
           >
-            {status === 'loading' ? 'Atualizando...' : 'Atualizar Todas as Descrições'}
+            {status === 'loading' ? (
+              <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Atualizando...</>
+            ) : status === 'success' ? (
+              <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Atualizado!</>
+            ) : status === 'error' ? (
+              <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg> Erro</>
+            ) : (
+              'Atualizar Todas as Descrições'
+            )}
           </button>
         </div>
 

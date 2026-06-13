@@ -1,0 +1,11 @@
+User-agent: *
+Disallow: /api/debug-norms
+Disallow: /api/test-search
+Disallow: /api/test-supabase
+Disallow: /api/upload-pdf
+Disallow: /api/log-ip
+Disallow: /api/auth/
+Disallow: /admin/
+Disallow: /upload
+
+Sitemap: https://arquiv.org/sitemap.xml

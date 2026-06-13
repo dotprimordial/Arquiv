@@ -135,6 +135,91 @@ export function removeAccents(text: string): string {
 }
 
 /**
+ * Generate Portuguese morphological variants for a normalized (accent-free) word.
+ * Handles plural↔singular, gender, and common suffix patterns.
+ */
+export function generateVariants(word: string): string[] {
+  if (word.length <= 2) return [word];
+  const variants = new Set<string>([word]);
+
+  // Plural → singular (word ends in 's')
+  if (word.endsWith('s') && word.length > 3) {
+    const noS = word.slice(0, -1);
+    variants.add(noS);
+    // -ções → -ção
+    if (word.endsWith('coes')) variants.add(word.slice(0, -4) + 'cao');
+    // -ões → -ão
+    if (word.endsWith('oes')) variants.add(word.slice(0, -2) + 'ao');
+    // -ães → -ão (also covers -ãos → -ao)
+    if (word.endsWith('aes') || word.endsWith('aos')) variants.add(word.slice(0, -2) + 'ao');
+    // -ais → -al
+    if (word.endsWith('ais') && word.length > 4) variants.add(word.slice(0, -3) + 'al');
+    // -eis → -el
+    if (word.endsWith('eis') && word.length > 4) variants.add(word.slice(0, -3) + 'el');
+    // -ns → -m
+    if (word.endsWith('ns') && word.length > 4) variants.add(word.slice(0, -2) + 'm');
+    // Gender plural: -as → -os
+    if (word.endsWith('as') && word.length > 3) variants.add(word.slice(0, -2) + 'os');
+  }
+
+  // Singular → plural (word does NOT end in 's')
+  if (!word.endsWith('s') && word.length > 3) {
+    // -ção → -ções
+    if (word.endsWith('cao')) variants.add(word.slice(0, -3) + 'coes');
+    // -ão → -ões (if not -ção)
+    if (word.endsWith('ao') && !word.endsWith('cao')) variants.add(word.slice(0, -2) + 'oes');
+    // -m → -ns
+    if (word.endsWith('m')) variants.add(word.slice(0, -1) + 'ns');
+    // -l → -is (via deletion)
+    if (word.endsWith('al') && word.length > 3) variants.add(word.slice(0, -2) + 'ais');
+    if (word.endsWith('el') && word.length > 3) variants.add(word.slice(0, -2) + 'eis');
+    if (word.endsWith('il') && word.length > 3) variants.add(word.slice(0, -2) + 'is');
+    if (word.endsWith('ol') && word.length > 3) variants.add(word.slice(0, -2) + 'ois');
+    if (word.endsWith('ul') && word.length > 3) variants.add(word.slice(0, -2) + 'uis');
+  }
+
+  // Gender: -a ↔ -o
+  if (word.endsWith('a') && word.length > 3) variants.add(word.slice(0, -1) + 'o');
+  if (word.endsWith('o') && word.length > 3) variants.add(word.slice(0, -1) + 'a');
+
+  return [...variants];
+}
+
+/**
+ * Checks if a value is valid human-readable text (rejects binary, control chars, etc.)
+ */
+export function isValidTextInput(str: unknown): str is string {
+  if (typeof str !== 'string') return false;
+  if (str.length === 0) return false;
+  if (str.length > 100000) return false;
+  let controlCount = 0;
+  for (let i = 0; i < Math.min(str.length, 5000); i++) {
+    const code = str.charCodeAt(i);
+    if (code < 32 && code !== 10 && code !== 13 && code !== 9) controlCount++;
+  }
+  if (controlCount / Math.min(str.length, 5000) > 0.1) return false;
+  let printableCount = 0;
+  for (let i = 0; i < Math.min(str.length, 5000); i++) {
+    const code = str.charCodeAt(i);
+    if ((code >= 32 && code <= 126) || code >= 192) printableCount++;
+  }
+  if (printableCount / Math.min(str.length, 5000) < 0.4) return false;
+  return true;
+}
+
+/**
+ * Check if a term (or any morphological variant) appears in the given text.
+ * Both term and text should already be accent-normalized.
+ */
+export function anyVariantMatches(term: string, text: string): boolean {
+  const variants = generateVariants(term);
+  for (const v of variants) {
+    if (text.includes(v)) return true;
+  }
+  return false;
+}
+
+/**
  * Extract meaningful keywords from a natural language query
  * Removes stop words and returns relevant terms
  */
@@ -207,26 +292,30 @@ export function calculateSearchScore(
   const normalizedKeywords = keywords.map(k => removeAccents(k));
   
   queryTokens.forEach(token => {
+    const variants = generateVariants(removeAccents(token));
+    const anyMatch = (text: string) => variants.some(v => text.includes(v));
+    
     // Title match (highest weight)
-    if (normalizedTitle.includes(token)) score += 10;
+    if (anyMatch(normalizedTitle)) score += 10;
     
     // Code match
-    if (normalizedCode.includes(token)) score += 8;
+    if (anyMatch(normalizedCode)) score += 8;
     
     // Keywords match
-    if (normalizedKeywords.some(k => k.includes(token))) score += 6;
+    if (normalizedKeywords.some(k => variants.some(v => k.includes(v)))) score += 6;
     
     // Description match
-    if (normalizedDesc.includes(token)) score += 4;
+    if (anyMatch(normalizedDesc)) score += 4;
   });
   
   // Bonus for multiple token matches
-  const matchCount = queryTokens.filter(token => 
-    normalizedTitle.includes(token) ||
-    normalizedCode.includes(token) ||
-    normalizedKeywords.some(k => k.includes(token)) ||
-    normalizedDesc.includes(token)
-  ).length;
+  const matchCount = queryTokens.filter(token => {
+    const variants = generateVariants(removeAccents(token));
+    const anyMatch = (text: string) => variants.some(v => text.includes(v));
+    return anyMatch(normalizedTitle) || anyMatch(normalizedCode) ||
+      normalizedKeywords.some(k => variants.some(v => k.includes(v))) ||
+      anyMatch(normalizedDesc);
+  }).length;
   
   if (matchCount > 1) {
     score += matchCount * 2; // Bonus for multiple matches

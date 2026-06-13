@@ -11,7 +11,7 @@ import {
   Loader2,
   Wand2,
 } from 'lucide-react';
-import { SearchResult, generateNormSummaryServer } from '@/app/actions/norm-actions';
+import { SearchResult, generateNormSummaryServer, reprocessNormSectionsAction } from '@/app/actions/norm-actions';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -50,18 +50,51 @@ function SemanticNormDisplay({
   const [expandedNorms, setExpandedNorms] = useState<Set<string>>(new Set());
   const [expandedContents, setExpandedContents] = useState<Set<string>>(new Set());
   const [generatingSummaryId, setGeneratingSummaryId] = useState<string | null>(null);
+  const [summarySuccessId, setSummarySuccessId] = useState<string | null>(null);
+  const [summaryErrorId, setSummaryErrorId] = useState<string | null>(null);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [regenerateSuccessId, setRegenerateSuccessId] = useState<string | null>(null);
+  const [regenerateErrorId, setRegenerateErrorId] = useState<string | null>(null);
 
   const handleGenerateSummary = async (normId: string) => {
     setGeneratingSummaryId(normId);
+    setSummarySuccessId(null);
+    setSummaryErrorId(null);
     try {
       await generateNormSummaryServer(normId);
+      setGeneratingSummaryId(null);
+      setSummarySuccessId(normId);
       toast.success('Resumo gerado com sucesso!');
-      // Pequeno delay para dar tempo do banco atualizar antes do refresh opcional
+      setTimeout(() => setSummarySuccessId((id) => id === normId ? null : id), 2000);
     } catch (error) {
       const err = error as Error;
-      toast.error(err.message || 'Erro ao gerar resumo');
-    } finally {
       setGeneratingSummaryId(null);
+      setSummaryErrorId(normId);
+      toast.error(err.message || 'Erro ao gerar resumo');
+      setTimeout(() => setSummaryErrorId((id) => id === normId ? null : id), 3000);
+    }
+  };
+
+  const handleRegenerate = async (normId: string) => {
+    setRegeneratingId(normId);
+    setRegenerateSuccessId(null);
+    setRegenerateErrorId(null);
+    try {
+      const res = await reprocessNormSectionsAction(normId);
+      if (res.success) {
+        setRegeneratingId(null);
+        setRegenerateSuccessId(normId);
+        toast.success(`Sections regeneradas: ${res.sectionsCreated}`);
+        setTimeout(() => setRegenerateSuccessId((id) => id === normId ? null : id), 2000);
+      } else {
+        throw new Error(res.error || 'Erro ao regenerar');
+      }
+    } catch (error) {
+      const err = error as Error;
+      setRegeneratingId(null);
+      setRegenerateErrorId(normId);
+      toast.error(err.message || 'Erro ao regenerar sections');
+      setTimeout(() => setRegenerateErrorId((id) => id === normId ? null : id), 3000);
     }
   };
 
@@ -450,15 +483,53 @@ function SemanticNormDisplay({
                       handleGenerateSummary(group.normId);
                     }}
                     disabled={generatingSummaryId === group.normId}
-                    className="inline-flex items-center gap-2 text-sm font-bold text-amber-600 hover:text-amber-700 transition-all disabled:opacity-50"
+                    className={`inline-flex items-center gap-2 text-sm font-bold transition-all disabled:opacity-50 ${
+                      summarySuccessId === group.normId
+                        ? 'text-emerald-600'
+                        : summaryErrorId === group.normId
+                        ? 'text-red-500'
+                        : 'text-amber-600 hover:text-amber-700'
+                    }`}
                     title="Gerar Resumo Manualmente"
                   >
                     {generatingSummaryId === group.normId ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : summarySuccessId === group.normId ? (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    ) : summaryErrorId === group.normId ? (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     ) : (
                       <Wand2 className="w-4 h-4" />
                     )}
-                    Resumir
+                    {summarySuccessId === group.normId ? 'Pronto' : summaryErrorId === group.normId ? 'Erro' : 'Resumir'}
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleRegenerate(group.normId);
+                    }}
+                    disabled={regeneratingId === group.normId}
+                    className={`inline-flex items-center gap-2 text-sm font-bold transition-all disabled:opacity-50 ${
+                      regenerateSuccessId === group.normId
+                        ? 'text-emerald-600'
+                        : regenerateErrorId === group.normId
+                        ? 'text-red-500'
+                        : 'text-blue-600 hover:text-blue-700'
+                    }`}
+                    title="Regenerar Sections e Embeddings"
+                  >
+                    {regeneratingId === group.normId ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : regenerateSuccessId === group.normId ? (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    ) : regenerateErrorId === group.normId ? (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    )}
+                    {regenerateSuccessId === group.normId ? 'Feito' : regenerateErrorId === group.normId ? 'Erro' : 'Regenerar'}
                   </button>
                 )}
               </div>

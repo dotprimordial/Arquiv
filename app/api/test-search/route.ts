@@ -1,5 +1,6 @@
 export const runtime = 'edge';
 import { searchNormsSemantic } from '@/app/actions/norm-actions';
+import { isValidTextInput } from '@/lib/search-utils';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -7,6 +8,11 @@ export async function GET(request: NextRequest) {
   const query = searchParams.get('query') || 'qual deve ser a area maxima do ocupaçãao dos lotes';
   const country = searchParams.get('country') || 'Moçambique';
   const limit = parseInt(searchParams.get('limit') || '10');
+
+  if (!isValidTextInput(query)) {
+    console.warn('[test-search] Query rejeitada: não é texto válido');
+    return NextResponse.json({ success: false, error: 'Consulta inválida.' }, { status: 400 });
+  }
 
   console.log('=== TESTE DE BUSCA SEMÂNTICA ===');
   console.log('Query:', query);
@@ -40,11 +46,11 @@ export async function GET(request: NextRequest) {
         }
       }))
     });
-  } catch (error: unknown) {
-    console.error('Erro no teste:', error);
+  } catch {
+    console.error('[test-search] Erro interno ao processar busca');
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: 'Erro interno no servidor',
       query,
       country
     }, { status: 500 });

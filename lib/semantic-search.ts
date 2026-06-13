@@ -22,18 +22,14 @@ export class EmbeddingClient {
           'X-Title': 'Arquiv - Semantic Search',
         },
         body: JSON.stringify({
-          model: 'nvidia/llama-nemotron-embed-vl-1b-v2:free',
+          model: 'openai/text-embedding-3-small',
           input: text.substring(0, 8000),
         }),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Embedding API Error:', {
-          status: response.status,
-          body: errorText.substring(0, 500),
-        });
-        throw new Error(`Embedding API error: ${response.status}`);
+        console.error('Embedding API Error:', { status: response.status });
+        throw new Error('Embedding API error');
       }
 
       const data = await response.json();
