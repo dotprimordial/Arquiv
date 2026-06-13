@@ -2,6 +2,7 @@
 import { headers } from 'next/headers';
 import HomePage from './HomePage';
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export default async function Page() {
