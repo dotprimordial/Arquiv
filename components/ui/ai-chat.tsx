@@ -1,19 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BGPattern } from "./bg-pattern";
 import { chatWithNormAssistant } from "@/app/actions/ai-chat";
 import { RippleButton } from "@/components/ui/multi-type-ripple-buttons";
+import { useCountry } from "@/contexts/country-context";
 
 export default function AIChatCard({ className }: { className?: string }) {
   const [messages, setMessages] = useState<{ sender: "ai" | "user"; text: string }[]>([
-    { sender: "ai", text: "👋 Olá! Sou seu assistente especializado em normas arquitetônicas. Como posso ajudar?" },
+    { sender: "ai", text: "Olá! Sou seu assistente especializado em normas arquitetônicas. Como posso ajudar?" },
   ]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { country } = useCountry();
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -24,7 +31,7 @@ export default function AIChatCard({ className }: { className?: string }) {
     setIsTyping(true);
 
     try {
-      const result = await chatWithNormAssistant(userMsg);
+      const result = await chatWithNormAssistant(userMsg, country?.name);
       
       if (result.success) {
         setMessages((prev) => [...prev, { sender: "ai", text: result.response || "Desculpe, não consegui gerar uma resposta." }]);
@@ -81,7 +88,7 @@ export default function AIChatCard({ className }: { className?: string }) {
 
         {/* Header */}
         <div className="px-4 py-3 border-b border-gray-200 relative z-10 bg-gray-50">
-          <h2 className="text-lg font-semibold text-gray-900">🤖 Assistente de Normas</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Assistente de Normas</h2>
         </div>
 
         {/* Messages */}
@@ -102,6 +109,8 @@ export default function AIChatCard({ className }: { className?: string }) {
               {msg.text}
             </motion.div>
           ))}
+
+          <div ref={messagesEndRef} />
 
           {/* AI Typing Indicator */}
           {isTyping && (

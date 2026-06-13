@@ -137,14 +137,13 @@ function NormDisplay({
       {norms.map((norm) => (
         <motion.div
           key={norm.id}
-          layout
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
             duration: 0.2,
             ease: 'easeOut'
           }}
-          className="p-0 hover:shadow-md transition-all group will-change-transform gpu-accelerated"
+          className="p-0 hover:shadow-md transition-all group"
         >
           <div className="w-full">
             <div className="bg-white border border-zinc-100 rounded-2xl p-6 shadow-sm">

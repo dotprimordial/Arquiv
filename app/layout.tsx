@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { Demo as Footer } from '@/components/footer-demo';
 import AIChatCard from '@/components/ui/ai-chat';
-import { getSessionAction } from '@/app/actions/auth-actions';
+import AppHeader from '@/components/AppHeader';
+import { AuthProvider, useAuth } from '@/contexts/auth-context';
+import { CountryProvider } from '@/contexts/country-context';
 
 // Essential imports for the layout
 import { Inter } from 'next/font/google';
@@ -14,6 +16,9 @@ import './globals.css';
 import AdScript from '@/components/AdScript';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import { cn } from "@/lib/utils";
+
+import dynamic from 'next/dynamic';
+const AuthModal = dynamic(() => import('@/components/AuthModal'), { ssr: false, loading: () => null });
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans',display:'swap'});
 
@@ -34,28 +39,38 @@ const equinox = localFont({
   display: 'swap',
 });
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+function LayoutAIChat() {
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isSessionLoading, setIsSessionLoading] = useState(true);
+  const { isAdmin, isSessionLoading } = useAuth();
 
-  useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const res = await getSessionAction();
-        if (res.success && res.isAdmin) {
-          setIsAdmin(true);
-        }
-      } catch (err) {
-        console.error('Session check error:', err);
-      } finally {
-        setIsSessionLoading(false);
-      }
-    };
+  return (
+    <>
+      {!isSessionLoading && isAdmin && isChatOpen && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <AIChatCard />
+        </div>
+      )}
+      {!isSessionLoading && isAdmin && (
+        <button
+          onClick={() => setIsChatOpen(!isChatOpen)}
+          className="fixed bottom-20 right-4 z-50 p-3 rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600 transition-colors"
+          aria-label="Toggle AI Chat"
+        >
+          <MessageSquare size={24} />
+        </button>
+      )}
+    </>
+  );
+}
 
-    checkSession();
-  }, []);
+function LayoutAuthModal() {
+  const { isAuthModalOpen, setAuthModalOpen } = useAuth();
+  return (
+    <AuthModal isOpen={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />
+  );
+}
 
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt" suppressHydrationWarning className={cn(equinox.variable, "font-sans", inter.variable)}>
       <head>
@@ -67,25 +82,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="theme-color" content="#1e40af" />
       </head>
       <body suppressHydrationWarning className="font-sans antialiased">
-        {children}
-        <Footer />
-        <Toaster position="top-center" richColors />
-        <AdScript />
-        <ServiceWorkerRegister />
-        {!isSessionLoading && isAdmin && isChatOpen && (
-          <div className="fixed bottom-4 right-4 z-50">
-            <AIChatCard />
-          </div>
-        )}
-        {!isSessionLoading && isAdmin && (
-          <button
-            onClick={() => setIsChatOpen(!isChatOpen)}
-            className="fixed bottom-20 right-4 z-50 p-3 rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600 transition-colors"
-            aria-label="Toggle AI Chat"
-          >
-            <MessageSquare size={24} />
-          </button>
-        )}
+        <AuthProvider>
+          <CountryProvider>
+            <AppHeader />
+            {children}
+            <Footer />
+            <Toaster position="top-center" richColors />
+            <AdScript />
+            <ServiceWorkerRegister />
+            <LayoutAIChat />
+            <LayoutAuthModal />
+          </CountryProvider>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -204,14 +204,13 @@ function SemanticNormDisplay({
       {groupedResults.map((group) => (
         <motion.div
           key={group.normId}
-          layout
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
             duration: 0.25,
             ease: 'easeOut'
           }}
-          className="p-0 hover:shadow-lg transition-all will-change-transform gpu-accelerated"
+          className="p-0 hover:shadow-lg transition-all"
         >
           <div className="w-full">
             {/* Norm Header */}

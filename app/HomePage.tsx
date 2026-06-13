@@ -2,16 +2,13 @@
 
 import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { LogIn, LogOut, Upload as UploadIcon, User, ShieldCheck, Loader2, Check } from 'lucide-react';
-import Image from 'next/image';
-import CountrySelector, { Country, countries } from '@/components/CountrySelector';
+import CountrySelector, { countries } from '@/components/CountrySelector';
+import { useCountry } from '@/contexts/country-context';
+import { useAuth } from '@/contexts/auth-context';
 import { ActionSearchBar } from '@/components/ui/action-search-bar';
 import NormDisplay from '@/components/NormDisplay';
-import SearchRateLimitDisplay from '@/components/SearchRateLimitDisplay';
 import { RateLimitModal } from '@/components/RateLimitModal';
 import { getArchitecturalNorms, Norm, updateNorm, getActiveCountries } from '@/lib/gemini';
-import { getSessionAction, logoutAction } from '@/app/actions/auth-actions';
-import { useRouter } from 'next/navigation';
 import { searchNormsSemantic, SearchResult, deleteNormServer } from '@/app/actions/norm-actions';
 import { toast } from 'sonner';
 
@@ -25,7 +22,6 @@ const SemanticNormDisplay = dynamic(() => import('@/components/SemanticNormDispl
     </div>
   ),
 });
-const AuthModal = dynamic(() => import('@/components/AuthModal'), { ssr: false, loading: () => null });
 
 const CATEGORIES = [
   "Todas", "Urbanismo", "Estruturas", "Segurança contra Incêndio",
@@ -33,18 +29,9 @@ const CATEGORIES = [
   "Térmica e Acústica", "Materiais", "Sustentabilidade", "Apresentação/Desenho"
 ] as const;
 
-interface SupabaseUser {
-  id: string;
-  email?: string;
-  user_metadata: {
-    full_name?: string;
-    avatar_url?: string;
-    [key: string]: unknown;
-  };
-}
-
 export default function HomePage() {
-  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
+  const { country: selectedCountry, setCountry: setSelectedCountry } = useCountry();
+  const { user, isAdmin, isSessionLoading, setAuthModalOpen } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAiSearchEnabled, setIsAiSearchEnabled] = useState(true);
@@ -58,18 +45,8 @@ export default function HomePage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalNormsCount, setTotalNormsCount] = useState(0);
   const pageSize = 10;
-  const [user, setUser] = useState<SupabaseUser | null>(null);
-
-  useEffect(() => {
-    document.title = 'Arquiv - Normas Técnicas de Construção e Legislação';
-    fetch('/api/log-ip', { method: 'POST' }).catch((err) => console.error('IP log error:', err));
-  }, []);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isRateLimitModalOpen, setIsRateLimitModalOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [isCountriesLoading, setIsCountriesLoading] = useState(true);
-  const router = useRouter();
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastRequestKeyRef = useRef<string>('');
@@ -84,33 +61,9 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    console.log('[Home] Carregando dados iniciais em paralelo...');
-    
-    Promise.all([
-      (async () => {
-        try {
-          const res = await getSessionAction();
-          if (res.success && res.user) {
-            setUser(res.user as unknown as SupabaseUser);
-            setIsAdmin(res.isAdmin);
-          }
-        } catch (err) {
-          console.error('Session check error:', err);
-        } finally {
-          setIsSessionLoading(false);
-        }
-      })(),
-      
-      fetchActiveCountries()
-    ]);
-    
-    const safetyTimeout = setTimeout(() => {
-      setIsSessionLoading(false);
-    }, 2000);
-    
-    return () => {
-      clearTimeout(safetyTimeout);
-    };
+    document.title = 'Arquiv - Normas Técnicas de Construção e Legislação';
+    fetch('/api/log-ip', { method: 'POST' }).catch(() => {});
+    fetchActiveCountries();
   }, [fetchActiveCountries]);
 
   useEffect(() => {
@@ -128,18 +81,7 @@ export default function HomePage() {
         setSelectedCountry(defaultCountry);
       }
     }
-  }, [activeCountryNames, selectedCountry]);
-
-  const handleLimitExceeded = useCallback(() => {
-    setHasExceededLimit(true);
-    setIsAiSearchEnabled(prev => {
-      if (prev) {
-        toast.error('Limite diário atingido. Mudando para busca normal.', { duration: 5000 });
-        return false;
-      }
-      return prev;
-    });
-  }, []);
+  }, [activeCountryNames, selectedCountry, setSelectedCountry]);
 
   const fetchNorms = useCallback(async (country: string, category: string, query: string, useAi: boolean = false, page: number = 1) => {
     if (!country || country.trim() === '') {
@@ -296,24 +238,6 @@ export default function HomePage() {
     }
   };
 
-  const [logoutState, setLogoutState] = useState<'idle' | 'loading' | 'success'>('idle');
-  const handleLogout = async () => {
-    if (logoutState === 'loading') return;
-    setLogoutState('loading');
-    try {
-      await logoutAction();
-      setLogoutState('success');
-      setTimeout(() => {
-        setUser(null);
-        setIsAdmin(false);
-        window.location.reload();
-      }, 500);
-    } catch (err) {
-      console.error('Logout error:', err);
-      setLogoutState('idle');
-    }
-  };
-
   const SkeletonLoader = () => (
     <div className="space-y-8 animate-pulse">
       <div className="py-16 text-center space-y-6">
@@ -398,91 +322,6 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-[#F9F9F8] text-zinc-900 selection:bg-zinc-900 selection:text-white">
-      <header className="border-b border-zinc-200 bg-white sticky top-0 z-40">
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="cursor-pointer" onClick={() => router.push('/')}>
-              <h1 className="font-[family-name:var(--font-equinox)] font-black text-xl leading-none uppercase tracking-wider hover:text-zinc-600 transition-colors">ARQUIV</h1>
-              <p className="text-zinc-400 text-xs mt-1">Normas para Projetos Arquitetónicos</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isSessionLoading ? (
-              <div className="flex items-center gap-3">
-                <div className="w-24 h-8 bg-zinc-200 rounded-full animate-pulse"></div>
-                <div className="w-10 h-10 bg-zinc-200 rounded-full animate-pulse"></div>
-              </div>
-            ) : user ? (
-              <div className="flex items-center gap-3">
-                <div className="hidden sm:block">
-                  <SearchRateLimitDisplay compact={true} onLimitExceeded={handleLimitExceeded} />
-                </div>
-                {isAdmin && (
-                  <button
-                    onClick={() => router.push('/upload')}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-full text-sm font-bold hover:bg-emerald-700 transition-all shadow-sm"
-                  >
-                    <UploadIcon className="w-4 h-4" />
-                    <span className="hidden xs:inline">Carregar Norma</span>
-                    <span className="inline xs:hidden">Carregar</span>
-                  </button>
-                )}
-                <div className="flex items-center gap-3 p-2 bg-zinc-50 rounded-full">
-                  <div className="w-8 h-8 bg-zinc-900 rounded-full flex items-center justify-center">
-                    {user.user_metadata?.avatar_url ? (
-                      <Image
-                        src={user.user_metadata.avatar_url}
-                        alt="Avatar"
-                        width={32}
-                        height={32}
-                        className="w-8 h-8 rounded-full object-cover"
-                        unoptimized
-                      />
-                    ) : (
-                      <User className="w-4 h-4 text-zinc-500" />
-                    )}
-                  </div>
-                  <span className="text-xs font-bold text-zinc-600 hidden xs:inline sm:inline">
-                    {isAdmin ? 'Admin' : (user.user_metadata?.full_name || user.email?.split('@')[0])}
-                  </span>
-                  {isAdmin && <ShieldCheck className="w-3 h-3 text-emerald-500 hidden xs:inline sm:inline" />}
-                </div>
-                <button
-                  onClick={handleLogout}
-                  disabled={logoutState !== 'idle'}
-                  className={`p-2 transition-colors ${
-                    logoutState === 'success' ? 'text-emerald-500' : 'text-zinc-400 hover:text-red-600'
-                  }`}
-                  title="Sair"
-                >
-                  {logoutState === 'loading' ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : logoutState === 'success' ? (
-                    <Check className="w-5 h-5" />
-                  ) : (
-                    <LogOut className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="hidden sm:block">
-                  <SearchRateLimitDisplay compact={true} onLimitExceeded={handleLimitExceeded} />
-                </div>
-                <button
-                  onClick={() => setIsAuthModalOpen(true)}
-                  className="flex items-center gap-2 px-4 xs:px-6 py-2 bg-zinc-900 text-white rounded-full text-xs xs:text-sm font-bold hover:bg-zinc-800 transition-all shadow-sm"
-                >
-                  <LogIn className="w-4 h-4" />
-                  <span className="hidden xs:inline">Entrar / Registar</span>
-                  <span className="inline xs:hidden">Entrar</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
 
       {isSessionLoading && isCountriesLoading ? (
         <SkeletonLoader />
@@ -657,19 +496,12 @@ export default function HomePage() {
         </>
       )}
 
-      <ErrorBoundary>
-        <AuthModal
-          isOpen={isAuthModalOpen}
-          onClose={() => setIsAuthModalOpen(false)}
-        />
-      </ErrorBoundary>
-
       <RateLimitModal
         isOpen={isRateLimitModalOpen}
         onClose={() => setIsRateLimitModalOpen(false)}
         onSignUp={() => {
           setIsRateLimitModalOpen(false);
-          setIsAuthModalOpen(true);
+          setAuthModalOpen(true);
         }}
       />
     </main>
