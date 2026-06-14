@@ -6,3 +6,7 @@ coverage/
 .env*
 !.env.example
 .env.example*
+.backups/
+*.bak
+*.bak2
+PERFORMANCE_AUDIT_REPORT.pdf
