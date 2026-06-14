@@ -1,17 +1,27 @@
 "use server";
 
 import OpenRouterClient, { OpenRouterMessage } from "@/lib/openrouter";
-import { searchNormsSemantic } from "./norm-actions";
+import { searchNormsSemantic, fallbackTextualSearch } from "./norm-actions";
 import { getAuthenticatedSupabaseClient } from "@/lib/supabase-server";
-import { isValidTextInput, processSearchQuery, generateVariants, removeAccents } from "@/lib/search-utils";
+import { isValidTextInput, processSearchQuery } from "@/lib/search-utils";
 
 const apiKey = process.env.OPENROUTER_API_KEY || "";
 
-const countryContinent: Record<string, string> = {
-  BR: "América do Sul", PT: "Europa", US: "América do Norte",
-  GB: "Europa", DE: "Europa", FR: "Europa", ES: "Europa",
-  AO: "África", MZ: "África",
-};
+function isInvalidKey(key: string) {
+  return !key || key.length < 10 || key === "dummy-key" || key === "MY_OPENROUTER_API_KEY";
+}
+
+interface ChatSource {
+  code: string;
+  title: string;
+  artigo?: string;
+}
+
+interface ChatSearchResult {
+  results: { code: string; title: string; artigo?: string; content: string }[];
+  context: string;
+  sources: ChatSource[];
+}
 
 function cleanHtml(text: string): string {
   return text
@@ -22,75 +32,124 @@ function cleanHtml(text: string): string {
     .trim();
 }
 
-function removeHiddenText(text: string): string {
-  if (!text) return "";
-  return text.replace(/-\*-[^]*?-\*-/g, "");
-}
-
-async function fallbackDirectSearch(
-  query: string,
-  country?: string
-): Promise<string> {
-  const supabase = await getAuthenticatedSupabaseClient();
-
-  let normsQuery = supabase
-    .from("norms")
-    .select("id, code, title, content, description, keywords");
-
-  if (country) {
-    const { data: countryData } = await supabase
-      .from("countries")
-      .select("id")
-      .eq("name", country)
-      .single();
-    if (countryData) {
-      normsQuery = normsQuery.eq(
-        "country_id",
-        (countryData as { id?: string }).id
-      );
+async function chatSearch(query: string, country?: string): Promise<ChatSearchResult> {
+  // Tier 1: Semantic search (with answer extraction filter)
+  try {
+    const results = await searchNormsSemantic(query, country || "Brasil", 8);
+    if (results && results.length > 0) {
+      const items = results.map((r) => ({
+        code: r.normCode,
+        title: r.normTitle,
+        artigo: r.sectionNumber || undefined,
+        content: cleanHtml(r.fullArticleContent || r.content || "").substring(0, 2000),
+      }));
+      return {
+        results: items,
+        context: items
+          .map((item, i) => `Resultado ${i + 1}:\n- Norma: ${item.code} - ${item.title}\n${item.artigo ? `- Artigo: ${item.artigo}\n` : ""}- Conteúdo: ${item.content}\n`)
+          .join("\n"),
+        sources: items.map(({ code, title, artigo }) => ({ code, title, artigo })),
+      };
     }
+  } catch (e) {
+    console.warn("[chatSearch] Semantic search failed:", e);
   }
 
-  const { data: norms } = await normsQuery.limit(30);
-  if (!norms || norms.length === 0) return "";
+  // Tier 2: Fetch norms from DB and use fallbackTextualSearch
+  try {
+    const supabase = await getAuthenticatedSupabaseClient();
+    let normsQuery = supabase
+      .from("norms")
+      .select(`id, code, title, content, description, keywords, countries(name)`);
 
-  const searchTokens = processSearchQuery(query);
-  const tokenVariants = new Map<string, string[]>();
-  for (const token of searchTokens) {
-    tokenVariants.set(token, generateVariants(removeAccents(token)));
-  }
-
-  const scored = norms.map((norm: Record<string, unknown>) => {
-    const content = removeHiddenText(
-      cleanHtml(String(norm.content || "") + " " + String(norm.description || ""))
-    );
-    const normalizedContent = removeAccents(content);
-    const title = removeAccents(String(norm.title || ""));
-    const code = removeAccents(String(norm.code || ""));
-    let score = 0;
-
-    for (const [, variants] of tokenVariants) {
-      for (const v of variants) {
-        if (title.includes(v)) score += 8;
-        else if (code.includes(v)) score += 6;
-        else if (normalizedContent.includes(v)) score += 2;
+    if (country) {
+      const { data: countryData } = await supabase
+        .from("countries")
+        .select("id")
+        .eq("name", country)
+        .single();
+      if (countryData) {
+        normsQuery = normsQuery.eq("country_id", (countryData as { id?: string }).id);
       }
     }
-    if (removeAccents(query).length > 3 && normalizedContent.includes(removeAccents(query))) {
-      score += 10;
+
+    const { data: normsData } = await normsQuery.limit(30);
+    if (normsData && normsData.length > 0) {
+      const ftResults = await fallbackTextualSearch(normsData, query, 8);
+      if (ftResults && ftResults.length > 0) {
+        const items = ftResults.map((r) => ({
+          code: r.normCode,
+          title: r.normTitle,
+          artigo: r.sectionNumber || undefined,
+          content: cleanHtml(r.content || "").substring(0, 2000),
+        }));
+        return {
+          results: items,
+          context: items
+            .map((item, i) => `Resultado ${i + 1}:\n- Norma: ${item.code} - ${item.title}\n${item.artigo ? `- Artigo: ${item.artigo}\n` : ""}- Conteúdo: ${item.content}\n`)
+            .join("\n"),
+          sources: items.map(({ code, title, artigo }) => ({ code, title, artigo })),
+        };
+      }
+    }
+  } catch (e) {
+    console.warn("[chatSearch] Textual search failed:", e);
+  }
+
+  // Tier 3: Direct keyword search (last resort)
+  try {
+    const supabase = await getAuthenticatedSupabaseClient();
+    let normsQuery = supabase
+      .from("norms")
+      .select("id, code, title, content, description, keywords");
+
+    if (country) {
+      const { data: countryData } = await supabase
+        .from("countries")
+        .select("id")
+        .eq("name", country)
+        .single();
+      if (countryData) {
+        normsQuery = normsQuery.eq("country_id", (countryData as { id?: string }).id);
+      }
     }
 
-    return { id: String(norm.id), code: String(norm.code), title: String(norm.title), content, score };
-  }).filter((n) => n.score > 0).sort((a, b) => b.score - a.score).slice(0, 5);
+    const { data: norms } = await normsQuery.limit(30);
+    if (!norms || norms.length === 0) return { results: [], context: "", sources: [] };
 
-  if (scored.length === 0) return "";
+    const searchTokens = processSearchQuery(query);
+    const queryLower = query.toLowerCase();
 
-  return scored
-    .map((n, i) => {
-      const snippet = n.content.substring(0, 2500);
-      return `Resultado ${i + 1}:\n- Norma: ${n.code} - ${n.title}\n- Conteúdo: ${snippet}\n`;
-    })
-    .join("\n");
+    const scored = norms.map((norm: Record<string, unknown>) => {
+      const content = cleanHtml(String(norm.content || "") + " " + String(norm.description || "")).toLowerCase();
+      const title = String(norm.title || "").toLowerCase();
+      const code = String(norm.code || "").toLowerCase();
+      let score = 0;
+      for (const token of searchTokens) {
+        const t = token.toLowerCase();
+        if (title.includes(t)) score += 8;
+        else if (code.includes(t)) score += 6;
+        else if (content.includes(t)) score += 2;
+      }
+      if (queryLower.length > 3 && content.includes(queryLower)) score += 10;
+      return { norm, score, title: String(norm.title || ""), code: String(norm.code || ""), content: cleanHtml(String(norm.content || "")).substring(0, 2500) };
+    }).filter((n) => n.score > 0).sort((a, b) => b.score - a.score).slice(0, 5);
+
+    if (scored.length > 0) {
+      const items = scored.map((n) => ({ code: n.code, title: n.title, artigo: undefined as string | undefined, content: n.content }));
+      return {
+        results: items,
+        context: items
+          .map((item, i) => `Resultado ${i + 1}:\n- Norma: ${item.code} - ${item.title}\n- Conteúdo: ${item.content}\n`)
+          .join("\n"),
+        sources: items.map(({ code, title }) => ({ code, title })),
+      };
+    }
+  } catch (e) {
+    console.warn("[chatSearch] Direct search failed:", e);
+  }
+
+  return { results: [], context: "", sources: [] };
 }
 
 export async function chatWithNormAssistant(
@@ -102,40 +161,17 @@ export async function chatWithNormAssistant(
     return { success: false, error: "Mensagem inválida." };
   }
 
+  if (isInvalidKey(apiKey)) {
+    console.error("[chatWithNormAssistant] API key inválida ou não configurada");
+    return { success: false, error: "Assistente temporariamente indisponível (API key)." };
+  }
+
   try {
-    let relevantContext = "";
+    const searchResult = await chatSearch(userMessage, country);
+    const { context, sources } = searchResult;
 
-    // Step 1: Try semantic search
-    try {
-      const searchResults = await searchNormsSemantic(userMessage, country || "Brasil", 8);
-      if (searchResults && searchResults.length > 0) {
-        relevantContext = searchResults
-          .map((result, index) => {
-            const raw = result.fullArticleContent || result.content || "";
-            const content = cleanHtml(raw).substring(0, 2000);
-            const artigo = result.sectionNumber ? `Art. ${result.sectionNumber}` : "";
-            return `Resultado ${index + 1}:\n- Norma: ${result.normCode} - ${result.normTitle}\n- Artigo: ${artigo}\n- Conteúdo: ${content}\n`;
-          })
-          .join("\n");
-      }
-    } catch {
-      console.warn("[chatWithNormAssistant] Semantic search failed, trying direct search...");
-    }
-
-    // Step 2: Fallback to direct search if semantic returned nothing
-    if (!relevantContext) {
-      relevantContext = await fallbackDirectSearch(userMessage, country);
-    }
-
-    // Step 3: Derive continent
-    const countryCode = Object.entries(countryContinent).find(
-      ([, v]) => v === country
-    )?.[0];
-    const continent = countryCode ? countryContinent[countryCode] : undefined;
-
-    // Step 4: Build strict RAG prompt
-    const contextBlock = relevantContext
-      ? `CONTEXTO DAS NORMAS (responda APENAS com base nisto):\n${relevantContext}`
+    const contextBlock = context
+      ? `CONTEXTO DAS NORMAS (responda APENAS com base nisto):\n${context}`
       : "Nenhuma norma relevante encontrada na base de dados para esta pergunta.";
 
     const systemPrompt = `Você é um assistente especializado em normas arquitetônicas e de construção.
@@ -151,7 +187,7 @@ REGRAS:
 ${contextBlock}`;
 
     const userPrompt = country
-      ? `País do usuário: ${country}${continent ? ` (${continent})` : ""}\n\nPergunta: ${userMessage}`
+      ? `País do usuário: ${country}\n\nPergunta: ${userMessage}`
       : `Pergunta: ${userMessage}`;
 
     const messages: OpenRouterMessage[] = [
@@ -159,7 +195,6 @@ ${contextBlock}`;
       { role: "user", content: userPrompt },
     ];
 
-    // Step 5: Call AI
     const openRouter = new OpenRouterClient(apiKey);
     const response = await openRouter.chatCompletion(
       messages,
@@ -171,12 +206,14 @@ ${contextBlock}`;
 
     const aiResponse = response.choices?.[0]?.message?.content || "";
 
-    return { success: true, response: aiResponse };
+    return { success: true, response: aiResponse, sources };
   } catch (error) {
-    console.error("[chatWithNormAssistant] Error:", error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("[chatWithNormAssistant] Error:", errMsg);
     return {
       success: false,
       error: "Desculpe, não consegui processar sua pergunta agora.",
+      debug: errMsg,
     };
   }
 }

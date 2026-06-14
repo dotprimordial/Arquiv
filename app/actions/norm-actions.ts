@@ -2280,7 +2280,7 @@ EXEMPLO DE RESPOSTA:
 }
 
 // Fallback textual search function
-async function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: string, limit: number): Promise<SearchResult[]> {
+export async function fallbackTextualSearch(norms: Array<Record<string, unknown>>, query: string, limit: number): Promise<SearchResult[]> {
   const queryLower = cleanHtmlFormatting(query).toLowerCase();
   
   // Use processSearchQuery to expand terms with synonyms for better matching

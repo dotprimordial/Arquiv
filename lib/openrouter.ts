@@ -33,9 +33,8 @@ export class OpenRouterClient {
     responseFormat?: { type: 'json_object' },
     maxTokens: number = 1024
   ): Promise<OpenRouterResponse> {
-    // Add 10 second timeout to prevent long waits
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
       const response = await fetch(`${this.baseURL}/chat/completions`, {

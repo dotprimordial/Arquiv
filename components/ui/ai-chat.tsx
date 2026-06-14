@@ -2,17 +2,23 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { BGPattern } from "./bg-pattern";
 import { chatWithNormAssistant } from "@/app/actions/ai-chat";
 import { RippleButton } from "@/components/ui/multi-type-ripple-buttons";
 import { useCountry } from "@/contexts/country-context";
 
+interface ChatMessage {
+  sender: "ai" | "user";
+  text: string;
+  sources?: { code: string; title: string; artigo?: string }[];
+}
+
 export default function AIChatCard({ className }: { className?: string }) {
-  const [messages, setMessages] = useState<{ sender: "ai" | "user"; text: string }[]>([
+  const [messages, setMessages] = useState<ChatMessage[]>([
     { sender: "ai", text: "Olá! Sou seu assistente especializado em normas arquitetônicas. Como posso ajudar?" },
   ]);
+  const [expandedSources, setExpandedSources] = useState<Set<number>>(new Set());
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -22,19 +28,32 @@ export default function AIChatCard({ className }: { className?: string }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const toggleSources = (msgIndex: number) => {
+    setExpandedSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(msgIndex)) next.delete(msgIndex);
+      else next.add(msgIndex);
+      return next;
+    });
+  };
+
   const handleSend = async () => {
     if (!input.trim()) return;
-    
+
     const userMsg = input;
-    setMessages([...messages, { sender: "user", text: userMsg }]);
+    setMessages((prev) => [...prev, { sender: "user", text: userMsg }]);
     setInput("");
     setIsTyping(true);
 
     try {
       const result = await chatWithNormAssistant(userMsg, country?.name);
-      
+
       if (result.success) {
-        setMessages((prev) => [...prev, { sender: "ai", text: result.response || "Desculpe, não consegui gerar uma resposta." }]);
+        setMessages((prev) => [...prev, {
+          sender: "ai",
+          text: result.response || "Desculpe, não consegui gerar uma resposta.",
+          sources: (result as { sources?: { code: string; title: string; artigo?: string }[] }).sources,
+        }]);
       } else {
         setMessages((prev) => [...prev, { sender: "ai", text: result.error || "Desculpe, não consegui responder agora." }]);
       }
@@ -47,88 +66,66 @@ export default function AIChatCard({ className }: { className?: string }) {
   };
 
   return (
-    <div className={cn("relative w-[360px] h-[460px] rounded-2xl overflow-hidden p-[2px]", className)}>
-      <BGPattern variant="grid" mask="fade-edges" fill="#f3f4f6" />
-      {/* Animated Outer Border */}
-      <motion.div
-        className="absolute inset-0 rounded-2xl border-2 border-gray-200"
-        animate={{ rotate: [0, 360] }}
-        transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-      />
-
-      {/* Inner Card */}
-      <div className="relative flex flex-col w-full h-full rounded-xl border border-gray-200 overflow-hidden bg-white backdrop-blur-xl">
-        {/* Inner Animated Background */}
-        <motion.div
-          className="absolute inset-0 bg-gradient-to-br from-gray-50 via-white to-gray-100"
-          animate={{ backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"] }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          style={{ backgroundSize: "200% 200%" }}
-        />
-
-        {/* Floating Particles */}
-        {Array.from({ length: 20 }).map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 rounded-full bg-gray-200/50"
-            animate={{
-              y: ["0%", "-140%"],
-              x: [Math.random() * 200 - 100, Math.random() * 200 - 100],
-              opacity: [0, 1, 0],
-            }}
-            transition={{
-              duration: 5 + Math.random() * 3,
-              repeat: Infinity,
-              delay: i * 0.5,
-              ease: "easeInOut",
-            }}
-            style={{ left: `${Math.random() * 100}%`, bottom: "-10%" }}
-          />
-        ))}
-
-        {/* Header */}
-        <div className="px-4 py-3 border-b border-gray-200 relative z-10 bg-gray-50">
+    <div className={cn("relative w-[360px] h-[460px] rounded-2xl overflow-hidden", className)}>
+      <div className="relative flex flex-col w-full h-full rounded-2xl border border-gray-200 overflow-hidden bg-white">
+        <div className="px-4 py-3 border-b border-gray-200 z-10 bg-gray-50 shrink-0">
           <h2 className="text-lg font-semibold text-gray-900">Assistente de Normas</h2>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 px-4 py-3 overflow-y-auto space-y-3 text-sm flex flex-col relative z-10 bg-gray-50/50">
+        <div className="flex-1 px-4 py-3 overflow-y-auto space-y-3 text-sm flex flex-col z-10 bg-gray-50/50">
           {messages.map((msg, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className={cn(
-                "px-3 py-2 rounded-xl max-w-[80%] shadow-sm",
-                msg.sender === "ai"
-                  ? "bg-white text-gray-900 self-start border border-gray-200"
-                  : "bg-emerald-500 text-white font-semibold self-end"
+            <div key={i} className="flex flex-col">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className={cn(
+                  "px-3 py-2 rounded-xl max-w-[80%] shadow-sm",
+                  msg.sender === "ai"
+                    ? "bg-white text-gray-900 self-start border border-gray-200"
+                    : "bg-emerald-500 text-white font-semibold self-end"
+                )}
+              >
+                {msg.text}
+              </motion.div>
+
+              {msg.sender === "ai" && msg.sources && msg.sources.length > 0 && (
+                <div className="self-start mt-1 ml-1">
+                  <button
+                    onClick={() => toggleSources(i)}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                  >
+                    <BookOpen className="w-3 h-3" />
+                    {expandedSources.has(i) ? "Ocultar fontes" : `${msg.sources.length} fonte${msg.sources.length > 1 ? "s" : ""}`}
+                    {expandedSources.has(i) ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+                  {expandedSources.has(i) && (
+                    <div className="mt-1 space-y-1">
+                      {msg.sources.map((src, si) => (
+                        <div key={si} className="text-xs text-zinc-600 bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5">
+                          <span className="font-semibold text-zinc-800">{src.code}</span> — {src.title}
+                          {src.artigo && <span className="text-blue-600 ml-1">(Art. {src.artigo})</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
-            >
-              {msg.text}
-            </motion.div>
+            </div>
           ))}
 
           <div ref={messagesEndRef} />
 
-          {/* AI Typing Indicator */}
           {isTyping && (
-            <motion.div
-              className="flex items-center gap-1 px-3 py-2 rounded-xl max-w-[30%] bg-white self-start border border-gray-200 shadow-sm"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: [0, 1, 0.6, 1] }}
-              transition={{ repeat: Infinity, duration: 1.2 }}
-            >
+            <div className="flex items-center gap-1 px-3 py-2 rounded-xl max-w-[30%] bg-white self-start border border-gray-200 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse"></span>
-              <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse delay-200"></span>
-              <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse delay-400"></span>
-            </motion.div>
+              <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse" style={{ animationDelay: "0.2s" }}></span>
+              <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse" style={{ animationDelay: "0.4s" }}></span>
+            </div>
           )}
         </div>
 
-        {/* Input */}
-        <div className="flex items-center gap-2 p-3 border-t border-gray-200 relative z-10 bg-white">
+        <div className="flex items-center gap-2 p-3 border-t border-gray-200 z-10 bg-white shrink-0">
           <input
             className="flex-1 px-3 py-2 text-sm bg-gray-50 rounded-lg border border-gray-200 text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             placeholder="Pergunte sobre normas..."
@@ -140,7 +137,7 @@ export default function AIChatCard({ className }: { className?: string }) {
             onClick={handleSend}
             disabled={isTyping || !input.trim()}
             className={`p-2 rounded-lg transition-colors text-white disabled:opacity-40 ${
-              isTyping ? 'bg-emerald-400' : 'bg-emerald-500 hover:bg-emerald-600'
+              isTyping ? "bg-emerald-400" : "bg-emerald-500 hover:bg-emerald-600"
             }`}
           >
             {isTyping ? (
