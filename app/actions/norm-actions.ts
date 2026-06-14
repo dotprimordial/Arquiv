@@ -2133,7 +2133,6 @@ async function postProcessSearchResults(
 
   // Extract answers from top 10 results to ensure we don't miss any great matches
   const topResults = results.slice(0, 10);
-  const remainingResults = results.slice(10);
 
   const processedTop = await Promise.all(
     topResults.map(async (res) => {
@@ -2147,20 +2146,17 @@ async function postProcessSearchResults(
     })
   );
 
-  // Filter out results where the extracted answer says "não especifica", "N/A", etc.
+  // Filter out results where AI returned null or "N/A"
   const filteredProcessedTop = processedTop.filter((res) => {
-    if (!res.extractedAnswer) return true;
+    if (res.extractedAnswer === null) return false;
     const answerLower = res.extractedAnswer.toLowerCase();
     return !NEGATIVE_ANSWER_PATTERNS.some((p) => p.test(answerLower));
   });
   if (filteredProcessedTop.length < processedTop.length) {
-    console.log(`[postProcessSearchResults] Filtered out ${processedTop.length - filteredProcessedTop.length} results with non-direct answers`);
+    console.log(`[postProcessSearchResults] Filtered out ${processedTop.length - filteredProcessedTop.length} results`);
   }
 
-  const allProcessed = [...filteredProcessedTop, ...remainingResults.map(res => ({
-    ...res,
-    fullArticleContent: res.fullArticleContent || res.content
-  }))];
+  const allProcessed = filteredProcessedTop;
 
   // Strong heuristic ranking prioritizing direct answers
   const rankedHeuristic = allProcessed

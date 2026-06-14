@@ -311,8 +311,7 @@ function SemanticNormDisplay({
                       {group.sections[0].extractedAnswer && (
                         <div className="mb-4 bg-emerald-50/70 border border-emerald-100 rounded-xl p-5 shadow-sm">
                           <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 uppercase tracking-wider mb-2">
-                            <Wand2 className="w-4 h-4 text-emerald-600 animate-pulse" />
-                            <span>Resposta Direta da IA</span>
+                            <span>Resposta Rápida</span>
                           </div>
                           <p className="text-base font-semibold text-zinc-950 leading-relaxed">
                             {group.sections[0].extractedAnswer}
@@ -412,8 +411,7 @@ function SemanticNormDisplay({
                                 {section.extractedAnswer && (
                                   <div className="mb-3 bg-emerald-50/70 border border-emerald-100 rounded-xl p-4 shadow-sm">
                                     <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">
-                                      <Wand2 className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
-                                      <span>Resposta Direta da IA</span>
+                                      <span>Resposta Rápida</span>
                                     </div>
                                     <p className="text-sm font-semibold text-zinc-950 leading-relaxed">
                                       {section.extractedAnswer}
