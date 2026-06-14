@@ -373,7 +373,7 @@ Responda APENAS com JSON válido, sem markdown:
 
     const messages: OpenRouterMessage[] = [{ role: "user", content: prompt + "\n\nDOCUMENTO:\n" + content.substring(0, 12000) }];
 
-    const response = await openRouter.chatCompletion(messages, "anthropic/claude-3.5-haiku", 0.3, {
+    const response = await openRouter.chatCompletion(messages, "google/gemma-4-31b-it:free", 0.3, {
       type: "json_object",
     });
 
