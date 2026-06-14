@@ -15,6 +15,7 @@ import { Toaster } from 'sonner';
 import './globals.css';
 import AdScript from '@/components/AdScript';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
+import ClarityScript from '@/components/ClarityScript';
 import { cn } from "@/lib/utils";
 
 import dynamic from 'next/dynamic';
@@ -89,6 +90,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Footer />
             <Toaster position="top-center" richColors />
             <AdScript />
+            <ClarityScript />
             <ServiceWorkerRegister />
             <LayoutAIChat />
             <LayoutAuthModal />
