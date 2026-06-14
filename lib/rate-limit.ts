@@ -156,11 +156,7 @@ export async function checkRateLimit(
       };
     }
 
-    const remaining = Math.min(
-      minuteLimit - minuteCount,
-      hourLimit - hourCount,
-      dayLimit - dayCount,
-    );
+    const remaining = Math.max(0, dayLimit - dayCount);
 
     return {
       allowed: true,
