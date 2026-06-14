@@ -1622,7 +1622,7 @@ Retorne neste formato:
         'HTTP-Referer': 'https://arquiv.org',
       },
       body: JSON.stringify({
-        model: 'google/gemma-4-31b-it:free',
+        model: 'deepseek/deepseek-v4-flash',
         messages: [{ role: 'user', content: summaryPrompt }],
         temperature: 0.3,
         response_format: { type: "json_object" },
@@ -2091,7 +2091,7 @@ INSTRUÇÕES:
     const messages: OpenRouterMessage[] = [{ role: 'user', content: prompt }];
     const response = await openRouter.chatCompletion(
       messages,
-      'google/gemma-4-31b-it:free',
+      'deepseek/deepseek-v4-flash',
       0.3
     );
 
@@ -2245,7 +2245,7 @@ EXEMPLO DE RESPOSTA:
     
     const response = await openRouter.chatCompletion(
       messages,
-      'google/gemma-4-31b-it:free',
+      'deepseek/deepseek-v4-flash',
       0.1, // Low temperature for deterministic ranking
       { type: 'json_object' }
     );
@@ -2472,7 +2472,7 @@ INSTRUÇÕES:
       'HTTP-Referer': 'https://arquiv.org',
     },
     body: JSON.stringify({
-      model: 'google/gemma-4-31b-it:free',
+      model: 'deepseek/deepseek-v4-flash',
       messages: [{ role: 'user', content: summaryPrompt }],
       temperature: 0.3,
       max_tokens: 2000,
