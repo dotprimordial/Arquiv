@@ -1215,7 +1215,7 @@ export async function searchNormsSemantic(
   const cached = getCachedSearch<SearchResult[]>(cacheKey);
   if (cached) {
     console.log('[Cache] Hit for semantic search:', cacheKey);
-    // Still record so rate limit tracks cache hits — otherwise users bypass the limit by repeating the same query
+    // Still check rate limit and record — otherwise users bypass the limit by repeating the same query
     try {
       const headersList = await headers();
       const cachedIp = (headersList.get('x-forwarded-for')?.split(',')[0] || headersList.get('x-real-ip') || 'unknown').trim();
@@ -1225,7 +1225,10 @@ export async function searchNormsSemantic(
         const { data: { user } } = await supabaseAuth.auth.getUser();
         cachedUserId = user?.id;
       } catch { /* unauthenticated */ }
-      await recordSearch(cachedIp, 'semantic', query, country, cachedUserId);
+      const rateLimitResult = await checkRateLimit(cachedIp, 'semantic', undefined, cachedUserId);
+      if (rateLimitResult.allowed) {
+        await recordSearch(cachedIp, 'semantic', query, country, cachedUserId);
+      }
     } catch (err) {
       console.warn('[searchNormsSemantic] Erro ao registrar busca (cache hit):', err);
     }
@@ -1415,7 +1418,7 @@ export async function searchNormsSemantic(
 
           return { section: s, similarity: finalScore, rawSimilarity: similarity, keywordScore: keywordMatches };
         })
-        .filter((r): r is NonNullable<typeof r> => r !== null && r.rawSimilarity >= 0.35)
+        .filter((r): r is NonNullable<typeof r> => r !== null && r.rawSimilarity >= 0.55)
         .sort((a, b) => b.similarity - a.similarity)
         .slice(0, limit);
 
@@ -1471,7 +1474,7 @@ export async function searchNormsSemantic(
         // Cache and return
         setCachedSearch(cacheKey, processedResults);
         console.log('[Cache] Set vector search results:', cacheKey);
-        try { await recordSearch(clientIp, 'semantic', query, country, userId); } catch {}
+        try { await recordSearch(clientIp, 'semantic', query, country, userId); } catch (e) { console.warn('[searchNormsSemantic] Failed to record search:', e); }
         return processedResults;
       }
       console.log('[searchNormsSemantic] Vector search found no results above threshold, falling back...');
