@@ -1,12 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/auth-context';
 import { updateAllNormDescriptions } from '@/app/actions/norm-actions';
 import { RippleButton } from '@/components/ui/multi-type-ripple-buttons';
 
 export default function UpdateDescriptionsPage() {
+  const { isAdmin, isSessionLoading } = useAuth();
+  const router = useRouter();
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
+
+  useEffect(() => {
+    if (!isSessionLoading && !isAdmin) {
+      router.push('/');
+    }
+  }, [isAdmin, isSessionLoading, router]);
+
+  if (isSessionLoading || !isAdmin) {
+    return <div className="min-h-screen bg-gray-50 p-8"><div className="max-w-2xl mx-auto"><p className="text-gray-600">A carregar...</p></div></div>;
+  }
 
   const handleUpdate = async () => {
     setStatus('loading');

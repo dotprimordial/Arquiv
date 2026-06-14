@@ -59,6 +59,10 @@ export async function loginAction(email: string, password: string) {
 
 export async function signUpAction(email: string, password: string, fullName?: string) {
   try {
+    if (!password || password.length < 8) {
+      return { success: false, error: 'A palavra-passe deve ter pelo menos 8 caracteres.' };
+    }
+
     const supabase = await getAuthenticatedSupabaseClient();
     const { data, error } = await supabase.auth.signUp({
       email,

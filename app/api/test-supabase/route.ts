@@ -1,7 +1,19 @@
 export const runtime = 'edge';
 export const preferredRegion = 'auto';
 
+import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
+
 export async function GET() {
+  try {
+    const supabase = await getAuthenticatedSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+    if (authError || !user || user.email?.toLowerCase() !== adminEmail?.toLowerCase()) {
+      return Response.json({ error: 'Acesso negado' }, { status: 401 });
+    }
+  } catch {
+    return Response.json({ error: 'Acesso negado' }, { status: 401 });
+  }
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 

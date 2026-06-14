@@ -1,6 +1,7 @@
 export const runtime = 'edge';
 import { NextResponse } from 'next/server';
-import { getAdminSupabaseClient, getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
+import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
+import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
@@ -23,7 +24,11 @@ export async function POST(request: Request) {
     console.error('Failed to get auth user for IP logging:', e);
   }
 
-  const supabase = getAdminSupabaseClient();
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
   // Check rate limit for this IP (visits count)
   const rateResult = await checkRateLimit(ip, 'visit');
   if (!rateResult.allowed) {

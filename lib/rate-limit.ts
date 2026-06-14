@@ -1,21 +1,33 @@
 /**
  * Rate limiting utilities for search requests
- * Tracks and enforces per-user search quotas
+ * Tracks and enforces per-user search quotas with multiple time windows
  */
 
 import { getAdminSupabaseClient } from './supabase-server';
+import { createClient } from '@supabase/supabase-js';
 
 export interface RateLimitConfig {
-  // Limit for anonymous users per day (per IP)
+  anonymousSearchesPerMinute: number;
+  anonymousSearchesPerHour: number;
   anonymousSearchesPerDay: number;
-  // Limit for authenticated users per day (per user)
+  authenticatedSearchesPerMinute: number;
+  authenticatedSearchesPerHour: number;
   authenticatedSearchesPerDay: number;
 }
 
-// Default configuration
 export const DEFAULT_RATE_LIMIT: RateLimitConfig = {
+  anonymousSearchesPerMinute: 1,
+  anonymousSearchesPerHour: 2,
   anonymousSearchesPerDay: 5,
+  authenticatedSearchesPerMinute: 2,
+  authenticatedSearchesPerHour: 4,
   authenticatedSearchesPerDay: 5,
+};
+
+const BROWSE_LIMITS = {
+  perMinute: 60,
+  perHour: 1000,
+  perDay: 5000,
 };
 
 export interface RateLimitResult {
@@ -26,9 +38,6 @@ export interface RateLimitResult {
   reason?: string;
 }
 
-/**
- * Generate a hash of the search query for deduplication
- */
 async function generateQueryHash(query: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(query);
@@ -37,13 +46,8 @@ async function generateQueryHash(query: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Check if IP has exceeded rate limits
- * Supports hybrid rate limiting: different limits for authenticated vs anonymous users
- */
 export async function checkRateLimit(
   ipAddress: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   searchType: 'semantic' | 'keyword' | 'browse' | 'visit' = 'keyword',
   config: RateLimitConfig = DEFAULT_RATE_LIMIT,
   userId?: string
@@ -51,80 +55,124 @@ export async function checkRateLimit(
   try {
     const supabase = getAdminSupabaseClient();
     const now = new Date();
+    const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    // Determine limit based on authentication status
     const isAuth = !!userId;
-    let dailyLimit = isAuth ? config.authenticatedSearchesPerDay : config.anonymousSearchesPerDay;
 
-    // Build query based on authentication status
-    let countQuery = supabase
-      .from('search_usage')
-      .select('id', { count: 'exact', head: true })
-      .gte('searched_at', oneDayAgo.toISOString());
+    const isBrowse = searchType === 'visit' || searchType === 'browse';
+    let minuteLimit: number, hourLimit: number, dayLimit: number;
 
-    if (isAuth && userId) {
-      // Authenticated user – filter by user_id
-      countQuery = countQuery.eq('user_id', userId);
+    if (isBrowse) {
+      minuteLimit = BROWSE_LIMITS.perMinute;
+      hourLimit = BROWSE_LIMITS.perHour;
+      dayLimit = BROWSE_LIMITS.perDay;
+    } else if (isAuth) {
+      minuteLimit = config.authenticatedSearchesPerMinute;
+      hourLimit = config.authenticatedSearchesPerHour;
+      dayLimit = config.authenticatedSearchesPerDay;
     } else {
-      // Anonymous user – filter by IP
-      countQuery = countQuery.eq('ip_address', ipAddress);
+      minuteLimit = config.anonymousSearchesPerMinute;
+      hourLimit = config.anonymousSearchesPerHour;
+      dayLimit = config.anonymousSearchesPerDay;
     }
 
-    // Separate limits for visits/browsing vs actual searches
-    if (searchType === 'visit' || searchType === 'browse') {
-      countQuery = countQuery.eq('search_type', searchType);
-      dailyLimit = 5000; // Generous limit for non-search actions
-    } else {
-      countQuery = countQuery.in('search_type', ['semantic', 'keyword']);
+    const typeFilter = isBrowse
+      ? { 'eq': searchType }
+      : { 'in': ['semantic', 'keyword'] };
+
+    const idFilter = isAuth && userId ? { 'eq': 'user_id' } : { 'eq': 'ip_address' };
+    const idValue = isAuth && userId ? userId : ipAddress;
+
+    async function countSince(since: Date): Promise<number> {
+      let q = supabase
+        .from('search_usage')
+        .select('id', { count: 'exact', head: true })
+        .gte('searched_at', since.toISOString());
+
+      if (typeFilter.eq) {
+        q = q.eq('search_type', typeFilter.eq);
+      } else {
+        q = q.in('search_type', typeFilter.in);
+      }
+
+      if (idFilter.eq === 'user_id') {
+        q = q.eq('user_id', idValue);
+      } else {
+        q = q.eq('ip_address', idValue);
+      }
+
+      const { count, error } = await q;
+      if (error && error.code !== 'PGRST200') {
+        console.error('[checkRateLimit] Query error:', error);
+        return -1;
+      }
+      return count || 0;
     }
 
-    const { count: dayCount, error: dayError } = await countQuery;
+    const [minuteCount, hourCount, dayCount] = await Promise.all([
+      countSince(oneMinuteAgo),
+      countSince(oneHourAgo),
+      countSince(oneDayAgo),
+    ]);
 
-    if (dayError && dayError.code !== 'PGRST200') {
-      console.error('[checkRateLimit] Error fetching daily searches:', dayError);
-      // Allow request if database is down (fail open)
-      return { allowed: true, remaining: dailyLimit, limit: dailyLimit };
+    if (minuteCount < 0 || hourCount < 0 || dayCount < 0) {
+      return { allowed: false, remaining: 0, limit: Math.max(minuteLimit, hourLimit, dayLimit), reason: 'Erro interno do servidor. Tente novamente mais tarde.' };
     }
 
-
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[checkRateLimit] dayCount:', dayCount, 'dailyLimit:', dailyLimit, 'dayError:', dayError);
+    if (minuteCount >= minuteLimit) {
+      const resetTime = new Date(oneMinuteAgo.getTime() + 60 * 1000);
+      return {
+        allowed: false,
+        remaining: 0,
+        limit: minuteLimit,
+        resetTime,
+        reason: `Limite de ${minuteLimit} ${isBrowse ? 'requisições' : 'buscas'} por minuto excedido. Aguarde um momento.`,
+      };
     }
 
-    // Check daily limit
-    // Fallback dayCount to 0 if null
-    const safeDayCount = dayCount || 0;
-    
-    if (safeDayCount >= dailyLimit) {
+    if (hourCount >= hourLimit) {
+      const resetTime = new Date(oneHourAgo.getTime() + 60 * 60 * 1000);
+      return {
+        allowed: false,
+        remaining: 0,
+        limit: hourLimit,
+        resetTime,
+        reason: `Limite de ${hourLimit} ${isBrowse ? 'requisições' : 'buscas'} por hora excedido. Tente novamente mais tarde.`,
+      };
+    }
+
+    if (dayCount >= dayLimit) {
       const resetTime = new Date(oneDayAgo.getTime() + 24 * 60 * 60 * 1000);
       return {
         allowed: false,
         remaining: 0,
-        limit: dailyLimit,
+        limit: dayLimit,
         resetTime,
         reason: isAuth
-          ? `Limite de ${dailyLimit} buscas por dia excedido. Tente novamente amanhã.`
-          : `Limite de ${dailyLimit} buscas gratuitas por dia excedido. Crie uma conta gratuita para continuar pesquisando.`,
+          ? `Limite de ${dayLimit} ${isBrowse ? 'requisições' : 'buscas'} por dia excedido. Tente novamente amanhã.`
+          : `Limite de ${dayLimit} ${isBrowse ? 'requisições' : 'buscas'} gratuitas por dia excedido. Crie uma conta gratuita para continuar pesquisando.`,
       };
     }
 
+    const remaining = Math.min(
+      minuteLimit - minuteCount,
+      hourLimit - hourCount,
+      dayLimit - dayCount,
+    );
+
     return {
       allowed: true,
-      remaining: dailyLimit - safeDayCount,
-      limit: dailyLimit,
+      remaining,
+      limit: dayLimit,
     };
   } catch (error) {
     console.error('[checkRateLimit] Unexpected error:', error);
-    // Fail open to avoid blocking legitimate requests
-    return { allowed: true, remaining: DEFAULT_RATE_LIMIT.anonymousSearchesPerDay, limit: DEFAULT_RATE_LIMIT.anonymousSearchesPerDay };
+    return { allowed: false, remaining: 0, limit: DEFAULT_RATE_LIMIT.anonymousSearchesPerDay, reason: 'Erro interno do servidor. Tente novamente mais tarde.' };
   }
 }
 
-/**
- * Record a search for rate limiting purposes
- */
 export async function recordSearch(
   ipAddress: string,
   searchType: 'semantic' | 'keyword' | 'browse' | 'visit' = 'keyword',
@@ -132,7 +180,11 @@ export async function recordSearch(
   country?: string,
   userId?: string
 ): Promise<void> {
-  const supabase = getAdminSupabaseClient();
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
   const queryHash = query ? await generateQueryHash(query) : null;
 
   const { error } = await supabase
@@ -154,14 +206,12 @@ export async function recordSearch(
   }
 }
 
-/**
- * Get current usage statistics for an IP address
- */
 export async function getSearchStats(ipAddress: string) {
   try {
-    // Use admin client for rate-limit stats query (does not require authentication)
     const supabase = getAdminSupabaseClient();
     const now = new Date();
+    const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     const { data: stats, error } = await supabase
@@ -176,12 +226,20 @@ export async function getSearchStats(ipAddress: string) {
     }
 
     const allSearches = stats || [];
+    const lastMinuteSearches = allSearches.filter(
+      (s) => new Date(s.searched_at as string) > oneMinuteAgo
+    );
+    const lastHourSearches = allSearches.filter(
+      (s) => new Date(s.searched_at as string) > oneHourAgo
+    );
     const lastDaySearches = allSearches.filter(
       (s) => new Date(s.searched_at as string) > oneDayAgo
     );
 
     return {
       totalSearches: allSearches.length,
+      searchesLastMinute: lastMinuteSearches.length,
+      searchesLastHour: lastHourSearches.length,
       searchesLastDay: lastDaySearches.length,
       semanticSearches: allSearches.filter((s) => s.search_type === 'semantic').length,
       lastSearch: allSearches.length > 0 ? new Date(allSearches[0].searched_at as string) : null,
@@ -192,9 +250,6 @@ export async function getSearchStats(ipAddress: string) {
   }
 }
 
-/**
- * Admin function to reset rate limit for an IP
- */
 export async function resetRateLimit(ipAddress: string): Promise<void> {
   try {
     const supabase = getAdminSupabaseClient();

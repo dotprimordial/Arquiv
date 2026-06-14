@@ -3,17 +3,30 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public).*)',
   ],
 };
+
+function addSecurityHeaders(response: NextResponse) {
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://*.supabase.co",
+    "font-src 'self' data:",
+    "connect-src 'self' https://*.supabase.co https://openrouter.ai https://generativelanguage.googleapis.com",
+    "frame-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ];
+  response.headers.set('Content-Security-Policy', cspDirectives.join('; '));
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  return response;
+}
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -39,8 +52,9 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session if exists
   await supabase.auth.getUser();
+
+  response = addSecurityHeaders(response);
 
   return response;
 }

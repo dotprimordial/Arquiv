@@ -1,6 +1,6 @@
 'use server';
 
-import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from '@/lib/supabase-server';
+import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
 import { submitNormForIndexing } from './seo-actions';
 import { getCachedSearch, setCachedSearch, generateSearchCacheKey } from '@/lib/cache-edge';
 import { chunkDocument, generateSectionEmbeddings, EmbeddingClient, splitContentIntoArticles } from '@/lib/semantic-search';
@@ -141,8 +141,6 @@ export async function processAndUploadNorm(
   console.log('[processAndUploadNorm] Dados recebidos:', formData);
 
   const supabase = await getAuthenticatedSupabaseClient();
-  // For write operations, prefer the admin client (bypasses RLS when SERVICE_ROLE_KEY is set)
-  const supabaseWrite = getAdminSupabaseClient();
   const adminEmail = process.env.ADMIN_EMAIL;
 
   if (!adminEmail) {
@@ -192,7 +190,7 @@ export async function processAndUploadNorm(
     if (!categoryData || categoryData.length === 0) {
       console.log(`[processAndUploadNorm] Categoria não encontrada, criando: "${categoryName}"`);
       // Auto-create the missing category
-      const { data: newCategory, error: createError } = await supabaseWrite
+      const { data: newCategory, error: createError } = await supabase
         .from('categories')
         .insert({
           name: categoryName,
@@ -230,7 +228,7 @@ export async function processAndUploadNorm(
 
     console.log('[processAndUploadNorm] Insert data:', insertData);
 
-    const { data: normData, error: normError } = await supabaseWrite
+    const { data: normData, error: normError } = await supabase
       .from('norms')
       .insert(insertData)
       .select()
@@ -306,7 +304,7 @@ INSTRUÇÕES:
 
           if (summaryText) {
             // Insert summary into summaries table
-            const { error: insertError } = await supabaseWrite
+            const { error: insertError } = await supabase
               .from('summaries')
               .upsert({
                 norm_id: normId,
@@ -344,7 +342,7 @@ INSTRUÇÕES:
     // Require chunking: abort if insufficient content or API key missing
     if (!contentToProcess || contentToProcess.length <= 100 || !apiKey || apiKey.length <= 10) {
       try {
-        await supabaseWrite.from('norms').delete().eq('id', normId);
+        await supabase.from('norms').delete().eq('id', normId);
         console.warn('[processAndUploadNorm] Chunking skipped - norm removed:', normId);
       } catch (delErr) {
         console.error('[processAndUploadNorm] Falha ao remover norma após chunking skip:', delErr);
@@ -382,14 +380,14 @@ INSTRUÇÕES:
         order_index: s.orderIndex,
       }));
 
-      const { data: parentRows, error: parentError } = await supabaseWrite
+      const { data: parentRows, error: parentError } = await supabase
         .from('norm_sections')
         .insert(parentInserts)
         .select('id');
 
       if (parentError || !parentRows) {
         console.error('[processAndUploadNorm] Failed to insert parent article rows:', parentError);
-        await supabaseWrite.from('norms').delete().eq('id', normId);
+        await supabase.from('norms').delete().eq('id', normId);
         throw new Error('Falha ao salvar artigos-pai no banco. Upload cancelado.');
       }
 
@@ -412,7 +410,7 @@ INSTRUÇÕES:
         const parentIndex = secNumRoot ? Math.max(0, Number(secNumRoot) - 1) : null;
         const parentId = parentIndex !== null && parentIds[parentIndex] ? parentIds[parentIndex] : null;
 
-        const { error: sectionError } = await supabaseWrite
+        const { error: sectionError } = await supabase
           .from('norm_sections')
           .insert({
             norm_id: normId,
@@ -432,7 +430,7 @@ INSTRUÇÕES:
             console.error(`[processAndUploadNorm] embedding length: ${chunk.embedding.length}, type: ${typeof chunk.embedding}, first: ${chunk.embedding[0]}`);
           }
           // Cleanup and abort
-          await supabaseWrite.from('norms').delete().eq('id', normId);
+          await supabase.from('norms').delete().eq('id', normId);
           throw new Error(`Falha ao salvar sections no banco: ${sectionError.message}. Upload cancelado.`);
         } else {
           sectionsCreated++;
@@ -440,7 +438,7 @@ INSTRUÇÕES:
       }
 
       // Update norm with section count
-      await supabaseWrite
+      await supabase
         .from('norms')
         .update({ total_sections: sectionsCreated })
         .eq('id', normId);
@@ -450,7 +448,7 @@ INSTRUÇÕES:
       console.error('[processAndUploadNorm] Chunking failed (critical):', chunkError);
       // Cleanup norm record on failure
       try {
-        await supabaseWrite.from('norms').delete().eq('id', normId);
+        await supabase.from('norms').delete().eq('id', normId);
       } catch (cleanupErr) {
         console.error('[processAndUploadNorm] Erro ao tentar limpar norma após falha de chunking:', cleanupErr);
       }
@@ -482,14 +480,19 @@ INSTRUÇÕES:
 
 export async function reprocessNormSectionsAction(normId: string) {
   try {
+    const supabase = await getAuthenticatedSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+    if (!user || user.email?.toLowerCase() !== adminEmail?.toLowerCase()) {
+      return { success: false, error: 'Acesso negado' };
+    }
+
     const apiKey = process.env.OPENROUTER_API_KEY || '';
     if (!apiKey || apiKey.length <= 10) {
       return { success: false, error: 'OPENROUTER_API_KEY não configurada' };
     }
 
-    const supabaseWrite = getAdminSupabaseClient();
-
-    const { data: norm, error: normError } = await supabaseWrite
+    const { data: norm, error: normError } = await supabase
       .from('norms')
       .select('id, content, code, title')
       .eq('id', normId)
@@ -505,7 +508,7 @@ export async function reprocessNormSectionsAction(normId: string) {
     }
 
     // Delete existing sections
-    const { error: deleteError } = await supabaseWrite
+    const { error: deleteError } = await supabase
       .from('norm_sections')
       .delete()
       .eq('norm_id', normId);
@@ -541,7 +544,7 @@ export async function reprocessNormSectionsAction(normId: string) {
       order_index: s.orderIndex,
     }));
 
-    const { data: parentRows, error: parentError } = await supabaseWrite
+    const { data: parentRows, error: parentError } = await supabase
       .from('norm_sections')
       .insert(parentInserts)
       .select('id');
@@ -569,7 +572,7 @@ export async function reprocessNormSectionsAction(normId: string) {
       const parentIndex = secNumRoot ? Math.max(0, Number(secNumRoot) - 1) : null;
       const parentId = parentIndex !== null && parentIds[parentIndex] ? parentIds[parentIndex] : null;
 
-      const { error: sectionError } = await supabaseWrite
+      const { error: sectionError } = await supabase
         .from('norm_sections')
         .insert({
           norm_id: normId,
@@ -591,7 +594,7 @@ export async function reprocessNormSectionsAction(normId: string) {
     }
 
     // Step 6: Update total_sections
-    await supabaseWrite
+    await supabase
       .from('norms')
       .update({ total_sections: sectionsCreated })
       .eq('id', normId);
@@ -644,10 +647,15 @@ export interface GroupedSearchResult {
 // Server action to update all norm descriptions with example text
 export async function updateAllNormDescriptions() {
   try {
-    const supabaseWrite = getAdminSupabaseClient();
+    const supabase = await getAuthenticatedSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+    if (authError || !user || user.email?.toLowerCase() !== adminEmail?.toLowerCase()) {
+      return { success: false, error: 'Acesso negado: apenas administradores podem executar esta ação.' };
+    }
 
     console.log('Fetching all norms...');
-    const { data: norms, error } = await supabaseWrite
+    const { data: norms, error } = await supabase
       .from('norms')
       .select('id, code, title');
 
@@ -668,7 +676,7 @@ export async function updateAllNormDescriptions() {
     for (const norm of norms) {
       const exampleDescription = `Esta norma ${norm.code} - ${norm.title} estabelece os requisitos técnicos e procedimentos necessários para sua implementação. O documento contém disposições sobre os principais aspectos da norma, incluindo definições, requisitos de conformidade, e diretrizes para aplicação. Para informações detalhadas sobre cada artigo e capítulo, consulte o documento completo.`;
 
-      const { error: updateError } = await supabaseWrite
+      const { error: updateError } = await supabase
         .from('norms')
         .update({ description: exampleDescription })
         .eq('id', norm.id);
@@ -694,6 +702,7 @@ function cleanHtmlFormatting(text: string): string {
   if (!text) return '';
   return text
     .replace(/-\*-[^]*?-\*-/g, '') // Ignore custom hidden text marked with -*-
+    .replace(/!\[.*?\]\(.*?\)/g, '') // Remove markdown images ![alt](url)
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>|<\/div>|<\/li>|<\/h[1-6]>/gi, '\n')
     .replace(/<[^>]*>/g, '') // Remove remaining HTML tags
@@ -703,6 +712,7 @@ function cleanHtmlFormatting(text: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&#\d+;/g, ' ')
     .replace(/[ \t]+/g, ' ') // Replace multiple spaces/tabs with single space, preserve \n
     .replace(/\n\s*\n+/g, '\n\n') // Collapse multiple newlines into max 2
     .trim();
@@ -1435,7 +1445,7 @@ export async function searchNormsSemantic(
           const countryData = (norm?.countries as Array<{ name?: string }> | undefined)?.[0];
           const cleanContent = cleanHtmlFormatting(String(s.content || ''));
           const parentId = s.parent_section_id;
-          const fullArticleContent = parentId ? (parentContentMap.get(String(parentId)) || cleanContent) : cleanContent;
+          const fullArticleContent = parentId ? cleanHtmlFormatting(parentContentMap.get(String(parentId)) || cleanContent) : cleanContent;
 
           return {
             sectionId: `${String(s.norm_id)}-vs-${idx}`,
@@ -2347,7 +2357,7 @@ async function fallbackTextualSearch(norms: Array<Record<string, unknown>>, quer
 
       return excerpts.map((excerpt, excerptIndex) => {
         const parsedHierarchy = parseHierarchyFromText(excerpt, fullContent);
-        const fullArticleContent = findBestMatchingArticle(excerpt, parsedHierarchy.artigo, normArticles) || excerpt;
+        const fullArticleContent = cleanHtmlFormatting(findBestMatchingArticle(excerpt, parsedHierarchy.artigo, normArticles) || excerpt);
 
         return {
           sectionId: `${String(item.norm.id)}-${normIndex}-${excerptIndex}`,
@@ -2372,11 +2382,16 @@ async function fallbackTextualSearch(norms: Array<Record<string, unknown>>, quer
   return results.slice(0, Math.max(1, limit));
 }
 
-// FIX #7: deleteNormServer — Server Action para contornar RLS do cliente
 export async function deleteNormServer(id: string): Promise<void> {
   if (!id) throw new Error('ID da norma é obrigatório');
 
-  const supabase = getAdminSupabaseClient();
+  const supabase = await getAuthenticatedSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  if (!user || user.email?.toLowerCase() !== adminEmail?.toLowerCase()) {
+    throw new Error('Acesso negado');
+  }
+
   const { error } = await supabase
     .from('norms')
     .delete()
@@ -2391,7 +2406,12 @@ export async function deleteNormServer(id: string): Promise<void> {
 }
 
 export async function generateNormSummaryServer(normId: string): Promise<string> {
-  const supabase = getAdminSupabaseClient();
+  const supabase = await getAuthenticatedSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  if (!user || user.email?.toLowerCase() !== adminEmail?.toLowerCase()) {
+    throw new Error('Acesso negado');
+  }
   const { data: norm, error: normError } = await supabase
     .from('norms')
     .select('id, code, title, content')

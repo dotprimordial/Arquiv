@@ -1,5 +1,6 @@
 export const runtime = 'edge';
-import { getAdminSupabaseClient } from '@/lib/supabase-server';
+import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
+import { checkRateLimit, recordSearch } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -8,10 +9,29 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function GET(req: NextRequest) {
   try {
+    const ip = req.headers.get('cf-connecting-ip') ||
+               req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+               req.headers.get('x-real-ip') ||
+               'unknown';
+
+    const rateLimitResult = await checkRateLimit(ip, 'browse');
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: rateLimitResult.reason || 'Limite de requisições excedido.' },
+        { status: 429 }
+      );
+    }
+
+    try {
+      await recordSearch(ip, 'browse');
+    } catch {
+      // Non-critical: don't block request if recording fails
+    }
+
     const { searchParams } = new URL(req.url);
     const limit = Math.min(parseInt(searchParams.get('limit') || '5'), 50);
 
-    const supabase = getAdminSupabaseClient();
+    const supabase = await getAuthenticatedSupabaseClient();
 
     // Fetch top norms ordered by creation date (recently added are good recommendations)
     // In a real app, you'd track view counts or search frequency

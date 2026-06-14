@@ -1,7 +1,7 @@
 'use server';
 
 import { submitUrlForIndexing } from '@/lib/google-search-console';
-import { getAdminSupabaseClient } from '@/lib/supabase-server';
+import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
 
 /**
  * Submit a norm URL to Google Search Console for indexing
@@ -16,7 +16,7 @@ export async function submitNormForIndexing(
   alreadySubmitted?: boolean;
 }> {
   try {
-    const supabase = getAdminSupabaseClient();
+    const supabase = await getAuthenticatedSupabaseClient();
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://arquiv.org';
     const urlPath = `/norm_detail/${encodeURIComponent(normId)}`;
     const fullUrl = `${baseUrl}${urlPath}`;
@@ -105,7 +105,12 @@ export async function getIndexingStatus(): Promise<
   }>
 > {
   try {
-    const supabase = getAdminSupabaseClient();
+    const supabase = await getAuthenticatedSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+    if (!user || user.email?.toLowerCase() !== adminEmail?.toLowerCase()) {
+      return [];
+    }
 
     const { data, error } = await supabase
       .from('seo_indexing_status')

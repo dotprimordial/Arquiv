@@ -1,10 +1,12 @@
-import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from '@/lib/supabase-server';
+import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
+import { checkRateLimit, recordSearch } from '@/lib/rate-limit';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'seantomasytbr@gmail.com';
 const PDF_BUCKET_NAME = 'arquiv-files';
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 export async function POST(request: Request) {
   try {
@@ -19,6 +21,28 @@ export async function POST(request: Request) {
       );
     }
 
+    // Rate limit: max 10 uploads per hour per admin
+    const ip = request.headers.get('cf-connecting-ip') ||
+               request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+               request.headers.get('x-real-ip') ||
+               'unknown';
+
+    const uploadConfig = {
+      anonymousSearchesPerMinute: 0,
+      anonymousSearchesPerHour: 0,
+      anonymousSearchesPerDay: 0,
+      authenticatedSearchesPerMinute: 1,
+      authenticatedSearchesPerHour: 10,
+      authenticatedSearchesPerDay: 20,
+    };
+    const rateLimitResult = await checkRateLimit(ip, 'browse', uploadConfig, user.id);
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: 'Limite de uploads excedido. Tente novamente mais tarde.' },
+        { status: 429 }
+      );
+    }
+
     // 2. Parse form data
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -27,6 +51,13 @@ export async function POST(request: Request) {
     if (!file || !country) {
       return NextResponse.json(
         { error: 'Parâmetros em falta: ficheiro e país são obrigatórios.' },
+        { status: 400 }
+      );
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `Ficheiro demasiado grande. Tamanho máximo: 50MB.` },
         { status: 400 }
       );
     }
@@ -49,9 +80,7 @@ export async function POST(request: Request) {
     const fileName = `${Date.now()}-${file.name}`;
     const filePath = `${countryFolder}/${fileName}`;
 
-    // 3. Upload file via Admin Supabase client securely
-    const supabaseAdmin = getAdminSupabaseClient();
-    
+    // 3. Upload file via authenticated supabase client (RLS will verify admin)
     const bucketsToTry = [
       PDF_BUCKET_NAME,
       'arquiv-files',
@@ -67,7 +96,7 @@ export async function POST(request: Request) {
     for (const bucketName of bucketsToTry) {
       try {
         console.log(`[API Upload] Tentando bucket: ${bucketName} com caminho: ${filePath}`);
-        const { error: uploadError } = await supabaseAdmin.storage
+        const { error: uploadError } = await supabase.storage
           .from(bucketName)
           .upload(filePath, fileBuffer, {
             contentType: file.type || 'application/pdf',
@@ -75,7 +104,7 @@ export async function POST(request: Request) {
           });
 
         if (!uploadError) {
-          const { data: urlData } = supabaseAdmin.storage
+          const { data: urlData } = supabase.storage
             .from(bucketName)
             .getPublicUrl(filePath);
 
@@ -98,6 +127,12 @@ export async function POST(request: Request) {
         { error: `Falha ao carregar arquivo nos buckets de storage. Erro: ${lastErrorMsg || 'Bucket inacessível'}` },
         { status: 500 }
       );
+    }
+
+    try {
+      await recordSearch(ip, 'browse', undefined, country, user.id);
+    } catch {
+      // Non-critical: don't block response if recording fails
     }
 
     return NextResponse.json({

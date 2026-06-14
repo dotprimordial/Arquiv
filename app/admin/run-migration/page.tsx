@@ -1,10 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/auth-context';
 
 export default function RunMigrationPage() {
+  const { isAdmin, isSessionLoading } = useAuth();
+  const router = useRouter();
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [result, setResult] = useState<string>('');
+
+  useEffect(() => {
+    if (!isSessionLoading && !isAdmin) {
+      router.push('/');
+    }
+  }, [isAdmin, isSessionLoading, router]);
+
+  if (isSessionLoading || !isAdmin) {
+    return <div className="min-h-screen bg-gray-50 p-8"><div className="max-w-4xl mx-auto"><p className="text-gray-600">A carregar...</p></div></div>;
+  }
 
   const handleRunMigration = async () => {
     setStatus('loading');

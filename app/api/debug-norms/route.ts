@@ -1,13 +1,16 @@
 export const runtime = 'edge';
 
-import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from '@/lib/supabase-server';
+import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function GET(_request: Request) {
   try {
     const supabase = await getAuthenticatedSupabaseClient();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const supabaseAdmin = getAdminSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+    if (authError || !user || user.email?.toLowerCase() !== adminEmail?.toLowerCase()) {
+      return Response.json({ error: 'Acesso negado' }, { status: 401 });
+    }
 
     console.log('[debug-norms] Starting diagnostic...');
 

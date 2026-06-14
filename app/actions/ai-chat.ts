@@ -15,8 +15,9 @@ const countryContinent: Record<string, string> = {
 
 function cleanHtml(text: string): string {
   return text
+    .replace(/!\[.*?\]\(.*?\)/g, "")
     .replace(/<[^>]*>/g, "")
-    .replace(/&[a-z]+;/g, " ")
+    .replace(/&[a-z]+;|&#\d+;/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -110,7 +111,8 @@ export async function chatWithNormAssistant(
       if (searchResults && searchResults.length > 0) {
         relevantContext = searchResults
           .map((result, index) => {
-            const content = (result.fullArticleContent || result.content || "").substring(0, 2000);
+            const raw = result.fullArticleContent || result.content || "";
+            const content = cleanHtml(raw).substring(0, 2000);
             const artigo = result.sectionNumber ? `Art. ${result.sectionNumber}` : "";
             return `Resultado ${index + 1}:\n- Norma: ${result.normCode} - ${result.normTitle}\n- Artigo: ${artigo}\n- Conteúdo: ${content}\n`;
           })
