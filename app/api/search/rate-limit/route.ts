@@ -41,7 +41,6 @@ export async function GET(request: NextRequest) {
         allowed: rateLimitStatus.allowed,
         remaining: rateLimitStatus.remaining,
         limit: rateLimitStatus.limit,
-        resetTime: rateLimitStatus.resetTime,
         reason: rateLimitStatus.reason,
       },
       stats: stats || {

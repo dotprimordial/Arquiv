@@ -1,40 +1,20 @@
-/**
- * Rate limiting utilities for search requests
- * Tracks and enforces per-user search quotas with multiple time windows
- */
-
 import { getAdminSupabaseClient } from './supabase-server';
 import { createClient } from '@supabase/supabase-js';
 
 export interface RateLimitConfig {
-  anonymousSearchesPerMinute: number;
-  anonymousSearchesPerHour: number;
   anonymousSearchesPerDay: number;
-  authenticatedSearchesPerMinute: number;
-  authenticatedSearchesPerHour: number;
   authenticatedSearchesPerDay: number;
 }
 
 export const DEFAULT_RATE_LIMIT: RateLimitConfig = {
-  anonymousSearchesPerMinute: 1,
-  anonymousSearchesPerHour: 2,
   anonymousSearchesPerDay: 5,
-  authenticatedSearchesPerMinute: 2,
-  authenticatedSearchesPerHour: 4,
   authenticatedSearchesPerDay: 5,
-};
-
-const BROWSE_LIMITS = {
-  perMinute: 60,
-  perHour: 1000,
-  perDay: 5000,
 };
 
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
   limit: number;
-  resetTime?: Date;
   reason?: string;
 }
 
@@ -55,112 +35,46 @@ export async function checkRateLimit(
   try {
     const supabase = getAdminSupabaseClient();
     const now = new Date();
-    const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     const isAuth = !!userId;
+    const dayLimit = isAuth ? config.authenticatedSearchesPerDay : config.anonymousSearchesPerDay;
 
-    const isBrowse = searchType === 'visit' || searchType === 'browse';
-    let minuteLimit: number, hourLimit: number, dayLimit: number;
+    const searchTypes = searchType === 'visit' || searchType === 'browse'
+      ? [searchType]
+      : ['semantic', 'keyword'];
 
-    if (isBrowse) {
-      minuteLimit = BROWSE_LIMITS.perMinute;
-      hourLimit = BROWSE_LIMITS.perHour;
-      dayLimit = BROWSE_LIMITS.perDay;
-    } else if (isAuth) {
-      minuteLimit = config.authenticatedSearchesPerMinute;
-      hourLimit = config.authenticatedSearchesPerHour;
-      dayLimit = config.authenticatedSearchesPerDay;
-    } else {
-      minuteLimit = config.anonymousSearchesPerMinute;
-      hourLimit = config.anonymousSearchesPerHour;
-      dayLimit = config.anonymousSearchesPerDay;
-    }
-
-    const typeFilter = isBrowse
-      ? { 'eq': searchType }
-      : { 'in': ['semantic', 'keyword'] };
-
-    const idFilter = isAuth && userId ? { 'eq': 'user_id' } : { 'eq': 'ip_address' };
+    const idField = isAuth && userId ? 'user_id' : 'ip_address';
     const idValue = isAuth && userId ? userId : ipAddress;
 
-    async function countSince(since: Date): Promise<number> {
-      let q = supabase
-        .from('search_usage')
-        .select('id', { count: 'exact', head: true })
-        .gte('searched_at', since.toISOString());
+    const { count: dayCount, error } = await supabase
+      .from('search_usage')
+      .select('id', { count: 'exact', head: true })
+      .in('search_type', searchTypes)
+      .eq(idField, idValue)
+      .gte('searched_at', oneDayAgo.toISOString());
 
-      if (typeFilter.eq) {
-        q = q.eq('search_type', typeFilter.eq);
-      } else {
-        q = q.in('search_type', typeFilter.in);
-      }
-
-      if (idFilter.eq === 'user_id') {
-        q = q.eq('user_id', idValue);
-      } else {
-        q = q.eq('ip_address', idValue);
-      }
-
-      const { count, error } = await q;
-      if (error && error.code !== 'PGRST200') {
-        console.error('[checkRateLimit] Query error:', error);
-        return -1;
-      }
-      return count || 0;
+    if (error && error.code !== 'PGRST200') {
+      console.error('[checkRateLimit] Query error:', error);
+      return { allowed: false, remaining: 0, limit: dayLimit, reason: 'Erro interno do servidor. Tente novamente mais tarde.' };
     }
 
-    const [minuteCount, hourCount, dayCount] = await Promise.all([
-      countSince(oneMinuteAgo),
-      countSince(oneHourAgo),
-      countSince(oneDayAgo),
-    ]);
+    const currentCount = dayCount || 0;
 
-    if (minuteCount < 0 || hourCount < 0 || dayCount < 0) {
-      return { allowed: false, remaining: 0, limit: Math.max(minuteLimit, hourLimit, dayLimit), reason: 'Erro interno do servidor. Tente novamente mais tarde.' };
-    }
-
-    if (minuteCount >= minuteLimit) {
-      const resetTime = new Date(oneMinuteAgo.getTime() + 60 * 1000);
-      return {
-        allowed: false,
-        remaining: 0,
-        limit: minuteLimit,
-        resetTime,
-        reason: `Limite de ${minuteLimit} ${isBrowse ? 'requisições' : 'buscas'} por minuto excedido. Aguarde um momento.`,
-      };
-    }
-
-    if (hourCount >= hourLimit) {
-      const resetTime = new Date(oneHourAgo.getTime() + 60 * 60 * 1000);
-      return {
-        allowed: false,
-        remaining: 0,
-        limit: hourLimit,
-        resetTime,
-        reason: `Limite de ${hourLimit} ${isBrowse ? 'requisições' : 'buscas'} por hora excedido. Tente novamente mais tarde.`,
-      };
-    }
-
-    if (dayCount >= dayLimit) {
-      const resetTime = new Date(oneDayAgo.getTime() + 24 * 60 * 60 * 1000);
+    if (currentCount >= dayLimit) {
       return {
         allowed: false,
         remaining: 0,
         limit: dayLimit,
-        resetTime,
         reason: isAuth
-          ? `Limite de ${dayLimit} ${isBrowse ? 'requisições' : 'buscas'} por dia excedido. Tente novamente amanhã.`
-          : `Limite de ${dayLimit} ${isBrowse ? 'requisições' : 'buscas'} gratuitas por dia excedido. Crie uma conta gratuita para continuar pesquisando.`,
+          ? `Limite de ${dayLimit} buscas por dia excedido. Tente novamente amanhã.`
+          : `Limite de ${dayLimit} buscas gratuitas por dia excedido. Crie uma conta gratuita para continuar pesquisando.`,
       };
     }
 
-    const remaining = Math.max(0, dayLimit - dayCount);
-
     return {
       allowed: true,
-      remaining,
+      remaining: Math.max(0, dayLimit - currentCount),
       limit: dayLimit,
     };
   } catch (error) {
