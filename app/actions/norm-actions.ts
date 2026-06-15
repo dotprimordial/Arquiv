@@ -1,6 +1,6 @@
 'use server';
 
-import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
+import { getAuthenticatedSupabaseClient, getAdminSupabaseClient } from '@/lib/supabase-server';
 import { submitNormForIndexing } from './seo-actions';
 import { getCachedSearch, setCachedSearch, generateSearchCacheKey } from '@/lib/cache-edge';
 import { chunkDocument, generateSectionEmbeddings, EmbeddingClient, splitContentIntoArticles } from '@/lib/semantic-search';
@@ -140,7 +140,7 @@ export async function processAndUploadNorm(
   console.log('[processAndUploadNorm] === INÍCIO ===');
   console.log('[processAndUploadNorm] Dados recebidos:', formData);
 
-  const supabase = await getAuthenticatedSupabaseClient();
+  const supabase = getAdminSupabaseClient();
   const adminEmail = process.env.ADMIN_EMAIL;
 
   if (!adminEmail) {
