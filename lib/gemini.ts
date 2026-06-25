@@ -3,6 +3,7 @@
 import OpenRouterClient, { OpenRouterMessage } from "./openrouter";
 import { getAuthenticatedSupabaseClient } from "./supabase-server";
 import { processSearchQuery, calculateSearchScore, isValidTextInput } from './search-utils';
+import { getCachedData, setCachedData, generateSearchCacheKey, generateStaticCacheKey, invalidateNormCache } from './redis';
 
 // Prefer server-side key. Avoid exposing API keys to client bundles.
 const apiKey = (typeof window === 'undefined')
@@ -75,12 +76,16 @@ export const getArchitecturalNorms = async (
   pageSize: number = 10
 ): Promise<{ norms: Norm[]; totalCount: number }> => {
   const supabase = await getAuthenticatedSupabaseClient();
-  const cacheKey = `norms:${country}:${category}:${queryText || 'all'}:${useAi}:${page}:${pageSize}`;
   
-  // Check cache first (5 minutes TTL for search results)
-  const cached = getClientCache<{ norms: Norm[]; totalCount: number }>(cacheKey);
+  // Generate semantic cache key
+  const cacheKey = queryText && queryText.trim() !== ''
+    ? generateSearchCacheKey(useAi ? 'semantic' : 'textual', queryText, country, category, pageSize)
+    : generateStaticCacheKey('norms', { country, category, page, pageSize });
+  
+  // Check Redis cache first (5 minutes TTL for search results, 10 minutes for static data)
+  const cached = await getCachedData<{ norms: Norm[]; totalCount: number }>(cacheKey);
   if (cached) {
-    console.log(`[Cache] Hit for norms: ${country}/${category}/${queryText || 'all'}`);
+    console.log(`[Redis] Cache hit for norms: ${country}/${category}/${queryText || 'all'}`);
     return cached;
   }
 
@@ -254,8 +259,8 @@ INSTRUÇÕES:
               return null;
             })
             .filter((n): n is Norm => n !== null);
-          // Cache and return
-          setClientCache(cacheKey, { norms: results, totalCount: totalCount }, 5);
+          // Cache and return (5 minutes TTL for search results)
+          await setCachedData(cacheKey, { norms: results, totalCount: totalCount }, 300);
           return { norms: results, totalCount };
         }
       } catch (err) {
@@ -310,8 +315,9 @@ INSTRUÇÕES:
       results = scoredResults;
     }
 
-    // Cache and return results
-    setClientCache(cacheKey, { norms: results, totalCount: totalCount }, 5);
+    // Cache and return results (5 minutes TTL for search results, 10 minutes for static data)
+    const ttl = queryText && queryText.trim() !== '' ? 300 : 600;
+    await setCachedData(cacheKey, { norms: results, totalCount: totalCount }, ttl);
     return { norms: results, totalCount };
   } catch (outerError) {
     console.error("[getArchitecturalNorms] Erro geral:", outerError);
@@ -486,17 +492,23 @@ export const updateNorm = async (id: string, updates: Partial<Norm>) => {
     .select()
     .single();
   if (error) throw error;
+  
+  // Invalidate Redis cache since a norm was modified
+  invalidateNormCache().catch((err: Error) => {
+    console.warn('[updateNorm] Cache invalidation failed (non-critical):', err.message);
+  });
+  
   return data as Norm;
 };
 
 export const getActiveCountries = async (): Promise<string[]> => {
   const supabase = await getAuthenticatedSupabaseClient();
-  const cacheKey = 'activeCountries';
+  const cacheKey = generateStaticCacheKey('countries');
   
-  // Check cache first
-  const cached = getClientCache<string[]>(cacheKey);
+  // Check Redis cache first
+  const cached = await getCachedData<string[]>(cacheKey);
   if (cached) {
-    console.log('[Cache] Hit for activeCountries');
+    console.log('[Redis] Cache hit for activeCountries');
     return cached;
   }
   
@@ -524,8 +536,8 @@ export const getActiveCountries = async (): Promise<string[]> => {
 
     const result = Array.from(countries);
     
-    // Cache for 10 minutes
-    setClientCache(cacheKey, result, 10);
+    // Cache for 10 minutes (600 seconds)
+    await setCachedData(cacheKey, result, 600);
     console.log("[getActiveCountries] Países encontrados (cached):", result);
     return result;
   } catch (err) {

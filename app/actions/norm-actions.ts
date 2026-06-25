@@ -8,6 +8,7 @@ import { checkRateLimit, recordSearch } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import OpenRouterClient, { OpenRouterMessage } from '@/lib/openrouter';
 import { processSearchQuery, interpretUserQuery, removeAccents, generateVariants, anyVariantMatches, isValidTextInput } from '@/lib/search-utils';
+import { invalidateNormCache } from '@/lib/redis';
 
 const apiKey = process.env.OPENROUTER_API_KEY || '';
 
@@ -459,6 +460,12 @@ INSTRUÇÕES:
     console.log(`[processAndUploadNorm] Submitting for SEO indexing...`);
     submitNormForIndexing(normId, formData.code).catch((err: Error) => {
       console.warn('[processAndUploadNorm] SEO indexing failed (non-critical):', err.message);
+    });
+
+    // Invalidate Redis cache since a new norm was added
+    console.log(`[processAndUploadNorm] Invalidating cache...`);
+    invalidateNormCache().catch((err: Error) => {
+      console.warn('[processAndUploadNorm] Cache invalidation failed (non-critical):', err.message);
     });
 
     console.log(`[processAndUploadNorm] === SUCESSO ===`);
@@ -2400,6 +2407,11 @@ export async function deleteNormServer(id: string): Promise<void> {
     console.error('[deleteNormServer] Ocorreu um erro interno ao excluir a norma');
     throw new Error('Falha ao excluir norma');
   }
+
+  // Invalidate Redis cache since a norm was deleted
+  invalidateNormCache().catch((err: Error) => {
+    console.warn('[deleteNormServer] Cache invalidation failed (non-critical):', err.message);
+  });
 
   console.log('[deleteNormServer] ✓ Norma deletada:', id);
 }
