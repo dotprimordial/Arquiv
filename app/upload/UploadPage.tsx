@@ -10,6 +10,7 @@ import { processAndUploadNorm, analyzeDocumentStructureServer } from '@/app/acti
 import Link from 'next/link';
 import { RippleButton } from '@/components/ui/multi-type-ripple-buttons';
 import nextDynamic from 'next/dynamic';
+import DOMPurify from 'dompurify';
 
 const ReactQuill = nextDynamic(
   () => import('react-quill-new').then((mod) => {
@@ -659,7 +660,7 @@ export default function UploadPage() {
                       </p>
                       <div 
                         className="text-sm text-zinc-700 max-h-32 overflow-y-auto prose prose-sm"
-                        dangerouslySetInnerHTML={{ __html: normContent.substring(0, 500) + (normContent.length > 500 ? '...' : '') }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(normContent.substring(0, 500) + (normContent.length > 500 ? '...' : '')) }}
                       />
                     </div>
                   )}

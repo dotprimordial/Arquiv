@@ -4,6 +4,7 @@ import OpenRouterClient, { OpenRouterMessage } from "./openrouter";
 import { getAuthenticatedSupabaseClient } from "./supabase-server";
 import { processSearchQuery, calculateSearchScore, isValidTextInput } from './search-utils';
 import { getCachedData, setCachedData, generateSearchCacheKey, generateStaticCacheKey, invalidateNormCache } from './redis';
+import { sanitizeErrorMessage } from './utils';
 
 // Prefer server-side key. Avoid exposing API keys to client bundles.
 const apiKey = (typeof window === 'undefined')
@@ -410,7 +411,7 @@ export const getFullNormContent = async (country: string, code: string): Promise
       .single();
 
     if (countryError || !countryData) {
-      throw new Error(`País "${country}" não encontrado`);
+      throw new Error(sanitizeErrorMessage(`País "${country}" não encontrado`, 'País não encontrado'));
     }
 
     const { data, error } = await supabase
@@ -432,9 +433,10 @@ export const getFullNormContent = async (country: string, code: string): Promise
     console.error("❌ Erro ao buscar conteúdo no Supabase:", err);
   }
 
-  throw new Error(
-    `Norma "${code}" não encontrada no banco de dados ou com conteúdo incompleto. Por favor, verifique se o upload foi realizado corretamente.`
-  );
+  throw new Error(sanitizeErrorMessage(
+    `Norma "${code}" não encontrada no banco de dados ou com conteúdo incompleto. Por favor, verifique se o upload foi realizado corretamente.`,
+    'Norma não encontrada'
+  ));
 };
 
 export const getFullNormContentById = async (normId: string): Promise<string> => {
@@ -468,7 +470,7 @@ export const getFullNormContentById = async (normId: string): Promise<string> =>
     console.error("❌ Erro ao buscar conteúdo no Supabase:", err);
   }
 
-  throw new Error(`Norma com ID "${normId}" não encontrada no banco de dados.`);
+  throw new Error(sanitizeErrorMessage(`Norma com ID "${normId}" não encontrada no banco de dados.`, 'Norma não encontrada'));
 };
 
 // FIX #7: deleteNorm movida para server action (ver norm-actions.ts)
@@ -478,7 +480,7 @@ export const deleteNorm = async (id: string) => {
   const { error } = await supabase.from("norms").delete().eq("id", id);
   if (error) {
     console.error("[deleteNorm] Erro ao deletar:", error);
-    throw new Error(`Falha ao excluir norma: ${error.message}. Verifique as permissões RLS.`);
+    throw new Error(sanitizeErrorMessage(`Falha ao excluir norma: ${error.message}. Verifique as permissões RLS.`, 'Falha ao excluir norma'));
   }
   return true;
 };

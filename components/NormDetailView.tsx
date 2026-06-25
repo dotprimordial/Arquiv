@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, BookOpen, Loader2, AlertCircle } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { useRouter } from 'next/navigation';
+import DOMPurify from 'dompurify';
 
 interface NormDetailViewProps {
   code: string;
@@ -106,7 +107,7 @@ export default function NormDetailView({
                     </div>
                   </div>
                 ) : content?.trim().startsWith('<') ? (
-                  <div dangerouslySetInnerHTML={{ __html: content }} />
+                  <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} />
                 ) : (
                   <Markdown>{content}</Markdown>
                 )}

@@ -67,6 +67,11 @@ export function getAdminSupabaseClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!serviceRoleKey) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        '[Supabase] SUPABASE_SERVICE_ROLE_KEY is required in production for admin operations.'
+      );
+    }
     console.warn(
       '[Supabase] SUPABASE_SERVICE_ROLE_KEY not set — ' +
       'falling back to anon key. RLS policies WILL apply.'

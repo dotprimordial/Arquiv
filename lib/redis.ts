@@ -9,23 +9,29 @@ let redisClient: Redis | null = null;
 
 /**
  * Get or create Redis client instance
+ * Returns null if Redis is not configured (graceful degradation)
  */
-export function getRedisClient(): Redis {
+export function getRedisClient(): Redis | null {
   if (!redisClient) {
     const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
     const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
     if (!redisUrl || !redisToken) {
       console.warn('[Redis] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not configured. Caching will be disabled.');
-      throw new Error('Redis configuration missing');
+      return null;
     }
 
-    redisClient = new Redis({
-      url: redisUrl,
-      token: redisToken,
-    });
+    try {
+      redisClient = new Redis({
+        url: redisUrl,
+        token: redisToken,
+      });
 
-    console.log('[Redis] Client initialized');
+      console.log('[Redis] Client initialized');
+    } catch (error) {
+      console.error('[Redis] Failed to initialize Redis client:', error);
+      return null;
+    }
   }
 
   return redisClient;
@@ -79,6 +85,8 @@ export async function getCachedData<T>(key: string): Promise<T | null> {
 
   try {
     const redis = getRedisClient();
+    if (!redis) return null;
+    
     const data = await redis.get<string>(key);
     
     if (data) {
@@ -108,6 +116,8 @@ export async function setCachedData<T>(
 
   try {
     const redis = getRedisClient();
+    if (!redis) return;
+    
     await redis.set(key, JSON.stringify(value), { ex: ttlSeconds });
     console.log(`[Redis] Cached: ${key} (TTL: ${ttlSeconds}s)`);
   } catch (error) {
@@ -126,6 +136,8 @@ export async function invalidateCachePattern(pattern: string): Promise<void> {
 
   try {
     const redis = getRedisClient();
+    if (!redis) return;
+    
     const keys = await redis.keys(pattern);
     
     if (keys.length > 0) {

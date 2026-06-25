@@ -9,6 +9,7 @@ import { headers } from 'next/headers';
 import OpenRouterClient, { OpenRouterMessage } from '@/lib/openrouter';
 import { processSearchQuery, interpretUserQuery, removeAccents, generateVariants, anyVariantMatches, isValidTextInput } from '@/lib/search-utils';
 import { invalidateNormCache } from '@/lib/redis';
+import { normalizeEmail, sanitizeErrorMessage } from '@/lib/utils';
 
 const apiKey = process.env.OPENROUTER_API_KEY || '';
 
@@ -148,8 +149,8 @@ export async function processAndUploadNorm(
     throw new Error('Configuração do servidor incompleta: ADMIN_EMAIL não definido');
   }
 
-  // Server-side validation: verify user is admin (case-insensitive, trimmed)
-  if (formData.userEmail?.trim().toLowerCase() !== adminEmail.toLowerCase()) {
+  // Server-side validation: verify user is admin (normalized email comparison)
+  if (normalizeEmail(formData.userEmail) !== normalizeEmail(adminEmail)) {
     throw new Error(`Acesso negado: apenas ${adminEmail} pode adicionar normas`);
   }
 
@@ -241,7 +242,7 @@ export async function processAndUploadNorm(
       if (normError.message.includes('unique_norm_code_country') || normError.code === '23505') {
         throw new Error('Já existe uma norma com este código neste país. Por favor, verifique se a norma já foi cadastrada.');
       }
-      throw new Error(`Erro ao inserir norma: ${normError.message}`);
+      throw new Error(sanitizeErrorMessage(`Erro ao inserir norma: ${normError.message}`, 'Erro ao inserir norma'));
     }
 
     if (!normData) {
@@ -2405,7 +2406,7 @@ export async function deleteNormServer(id: string): Promise<void> {
 
   if (error) {
     console.error('[deleteNormServer] Ocorreu um erro interno ao excluir a norma');
-    throw new Error('Falha ao excluir norma');
+    throw new Error(sanitizeErrorMessage('Falha ao excluir norma', 'Falha ao excluir norma'));
   }
 
   // Invalidate Redis cache since a norm was deleted

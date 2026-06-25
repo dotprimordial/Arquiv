@@ -10,14 +10,16 @@ export const config = {
 function addSecurityHeaders(response: NextResponse) {
   const cspDirectives = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://*.supabase.co",
+    "script-src 'self' 'unsafe-inline'", // 'unsafe-eval' removed - requires refactoring if needed
+    "style-src 'self' 'unsafe-inline'", // Required for Tailwind CSS and inline styles
+    "img-src 'self' data: blob: https://*.supabase.co https://picsum.photos https://images.unsplash.com",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co https://openrouter.ai https://generativelanguage.googleapis.com",
+    "connect-src 'self' https://*.supabase.co https://openrouter.ai https://generativelanguage.googleapis.com https://*.upstash.io",
     "frame-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
+    "object-src 'none'",
+    "media-src 'self'",
   ];
   response.headers.set('Content-Security-Policy', cspDirectives.join('; '));
   response.headers.set('X-Content-Type-Options', 'nosniff');
