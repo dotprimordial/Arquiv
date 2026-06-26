@@ -8,9 +8,12 @@ export const config = {
 };
 
 function addSecurityHeaders(response: NextResponse) {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
   const cspDirectives = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'", // 'unsafe-eval' removed - requires refactoring if needed
+    // unsafe-eval required for Next.js React Refresh in development
+    `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''}`,
     "style-src 'self' 'unsafe-inline'", // Required for Tailwind CSS and inline styles
     "img-src 'self' data: blob: https://*.supabase.co https://picsum.photos https://images.unsplash.com",
     "font-src 'self' data:",
