@@ -30,7 +30,12 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
-      // Note: removed permissive googleusercontent pattern to reduce remote image surface
+      {
+        protocol: 'https',
+        hostname: '*.googleusercontent.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
   webpack: (config, {dev}) => {
