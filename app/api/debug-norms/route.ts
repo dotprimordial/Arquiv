@@ -3,7 +3,7 @@ export const runtime = 'edge';
 import { getAuthenticatedSupabaseClient } from '@/lib/supabase-server';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function GET(_request: Request) {
+export async function GET(request: Request) {
   try {
     const supabase = await getAuthenticatedSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -12,13 +12,16 @@ export async function GET(_request: Request) {
       return Response.json({ error: 'Acesso negado' }, { status: 401 });
     }
 
+    const url = new URL(request.url);
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '20')));
+
     console.log('[debug-norms] Starting diagnostic...');
 
     // 1. Check countries
     const { data: countries, error: countriesError } = await supabase
       .from('countries')
       .select('id, name')
-      .limit(20);
+      .limit(limit);
 
     console.log('[debug-norms] Countries:', { count: countries?.length, error: countriesError?.message });
 
@@ -26,7 +29,7 @@ export async function GET(_request: Request) {
     const { data: categories, error: categoriesError } = await supabase
       .from('categories')
       .select('id, name')
-      .limit(20);
+      .limit(limit);
 
     console.log('[debug-norms] Categories:', { count: categories?.length, error: categoriesError?.message });
 
@@ -43,7 +46,7 @@ export async function GET(_request: Request) {
       .from('norms')
       .select('id, code, title, country_id')
       .not('country_id', 'is', null)
-      .limit(5);
+      .limit(Math.min(5, limit));
 
     console.log('[debug-norms] Norms with country_id:', { 
       count: normsWithCountry?.length, 
@@ -56,7 +59,7 @@ export async function GET(_request: Request) {
       .from('norms')
       .select('id, code, title, country_id')
       .is('country_id', null)
-      .limit(5);
+      .limit(Math.min(5, limit));
 
     console.log('[debug-norms] Norms WITHOUT country_id:', { 
       count: normsNoCountry?.length,
@@ -68,7 +71,7 @@ export async function GET(_request: Request) {
       .from('norms')
       .select('country_id, countries(name)')
       .not('country_id', 'is', null)
-      .limit(50);
+      .limit(limit);
 
     const activeCountries = new Set<string>();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,7 +97,7 @@ export async function GET(_request: Request) {
         .from('norms')
         .select('id, code, title, country_id')
         .eq('country_id', firstCountry.id)
-        .limit(5);
+        .limit(Math.min(5, limit));
 
       normsForCountryData = data || [];
       normsForCountryError = error;

@@ -4,8 +4,9 @@ import { checkRateLimit, recordSearch } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * GET /api/norms/trending?limit=5
+ * GET /api/norms/trending?limit=5&cursor=timestamp
  * Returns trending (most frequently searched/viewed) norms for recommendations
+ * Uses cursor-based pagination for infinite scroll
  */
 export async function GET(req: NextRequest) {
   try {
@@ -29,17 +30,26 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const limit = Math.min(parseInt(searchParams.get('limit') || '5'), 50);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50);
+    const cursor = searchParams.get('cursor');
 
     const supabase = await getAuthenticatedSupabaseClient();
 
+    // Build query with cursor-based pagination
+    let query = supabase
+      .from('norms')
+      .select('id, code, title, category_id, categories(name), summaries!left(summary), created_at');
+
+    // If cursor provided, filter for records created before the cursor
+    if (cursor) {
+      query = query.lt('created_at', cursor);
+    }
+
     // Fetch top norms ordered by creation date (recently added are good recommendations)
     // In a real app, you'd track view counts or search frequency
-    const { data: norms, error } = await supabase
-      .from('norms')
-      .select('id, code, title, category_id, categories(name), summaries!left(summary)')
+    const { data: norms, error } = await query
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .limit(limit + 1); // Fetch one extra to determine if there's a next page
 
     if (error) {
       console.error('[GET /api/norms/trending] Ocorreu um erro');
@@ -49,7 +59,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Format response
+    // Format response with cursor for pagination
     interface FormattedNorm {
       id: string;
       code: string;
@@ -57,14 +67,26 @@ export async function GET(req: NextRequest) {
       category?: string;
     }
 
-    const formatted: FormattedNorm[] = (norms || []).map((norm: Record<string, unknown>) => ({
+    const hasMore = (norms || []).length > limit;
+    const items = hasMore ? (norms || []).slice(0, limit) : (norms || []);
+    
+    const formatted: FormattedNorm[] = items.map((norm: Record<string, unknown>) => ({
       id: (norm.id as string) || '',
       code: (norm.code as string) || '',
       title: (norm.title as string) || '',
       category: ((norm.categories as Record<string, unknown>)?.name as string | undefined),
     }));
 
-    return NextResponse.json(formatted);
+    // Get cursor from the last item if there are more results
+    const nextCursor = hasMore && items.length > 0 
+      ? (items[items.length - 1] as Record<string, unknown>).created_at as string
+      : null;
+
+    return NextResponse.json({
+      norms: formatted,
+      nextCursor,
+      hasMore
+    });
   } catch {
     console.error('[GET /api/norms/trending] Ocorreu um erro');
     return NextResponse.json(

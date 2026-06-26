@@ -8,8 +8,12 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const countryParam = url.searchParams.get('country') || 'Portugal';
     const categoryParam = url.searchParams.get('category') || 'Todas';
+    
+    // Pagination parameters
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+    const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20')));
 
-    console.log(`[api/norms] Query: country=${countryParam}, category=${categoryParam}`);
+    console.log(`[api/norms] Query: country=${countryParam}, category=${categoryParam}, page=${page}, pageSize=${pageSize}`);
     // Validação básica de ambiente
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
       console.error('[api/norms] Erro crítico: NEXT_PUBLIC_SUPABASE_URL não configurada');
@@ -88,7 +92,17 @@ export async function GET(request: Request) {
       }
     }
 
-    const { data: norms, error: normsError } = await query.limit(50);
+    // Get total count for pagination
+    const { count: totalCount } = await supabase
+      .from("norms")
+      .select("id", { count: "exact", head: true })
+      .eq("country_id", countryData.id);
+
+    // Apply pagination
+    const offset = (page - 1) * pageSize;
+    const { data: norms, error: normsError } = await query
+      .select(selectFields)
+      .range(offset, offset + pageSize - 1);
 
     if (normsError) {
       return Response.json({
@@ -99,6 +113,10 @@ export async function GET(request: Request) {
     return Response.json({
       success: true,
       count: norms?.length || 0,
+      totalCount: totalCount || 0,
+      page,
+      pageSize,
+      totalPages: Math.ceil((totalCount || 0) / pageSize),
       country: countryParam,
       category: categoryParam,
       norms: norms || []
