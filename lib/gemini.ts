@@ -14,20 +14,10 @@ const apiKey = (typeof window === 'undefined')
 const isInvalidKey = (key: string) => !key || key.length < 10 || key === "dummy-key" || key === "MY_OPENROUTER_API_KEY";
 
 /**
- * Simple client-side cache for data fetching
+ * Simple client-side cache for data fetching (fallback when Redis is unavailable)
  * TTL: 5 minutes for search results, 10 minutes for static data
  */
 const clientCache = new Map<string, { value: unknown; expiry: number }>();
-
-function getClientCache<T>(key: string): T | undefined {
-  const entry = clientCache.get(key);
-  if (!entry) return undefined;
-  if (Date.now() > entry.expiry) {
-    clientCache.delete(key);
-    return undefined;
-  }
-  return entry.value as T;
-}
 
 function setClientCache<T>(key: string, value: T, ttlMinutes = 5): void {
   clientCache.set(key, { value, expiry: Date.now() + ttlMinutes * 60 * 1000 });
