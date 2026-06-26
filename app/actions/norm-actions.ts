@@ -1421,12 +1421,12 @@ export async function searchNormsSemantic(
             }
           }
 
-          // Combine scores: semantic (70% weight) + keyword (30% weight)
-          const finalScore = (similarity * 0.7) + (Math.min(keywordMatches, 0.4) * 0.3);
+          // Combine scores: semantic (80% weight) + keyword (20% weight)
+          const finalScore = (similarity * 0.8) + (Math.min(keywordMatches, 0.4) * 0.2);
 
           return { section: s, similarity: finalScore, rawSimilarity: similarity, keywordScore: keywordMatches };
         })
-        .filter((r): r is NonNullable<typeof r> => r !== null && r.rawSimilarity >= 0.55)
+        .filter((r): r is NonNullable<typeof r> => r !== null && r.rawSimilarity >= 0.60)
         .sort((a, b) => b.similarity - a.similarity)
         .slice(0, limit);
 
