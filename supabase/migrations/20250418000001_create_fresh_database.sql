@@ -124,7 +124,7 @@
     );
 
     CREATE INDEX IF NOT EXISTS idx_norm_sections_norm_id ON norm_sections(norm_id);
-    CREATE INDEX IF NOT EXISTS idx_norm_sections_embedding ON norm_sections USING ivfflat (embedding vector_cosine_ops);
+    CREATE INDEX IF NOT EXISTS idx_norm_sections_embedding ON norm_sections USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
 
     ALTER TABLE norm_sections ENABLE ROW LEVEL SECURITY;
 
