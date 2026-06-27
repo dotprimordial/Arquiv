@@ -6,7 +6,7 @@ DROP FUNCTION IF EXISTS public.search_norm_sections CASCADE;
 
 CREATE OR REPLACE FUNCTION public.search_norm_sections(
     query_embedding vector(1536),
-    match_threshold FLOAT DEFAULT 0.55,
+    match_threshold FLOAT DEFAULT 0.40,
     match_count INT DEFAULT 10,
     p_country TEXT DEFAULT NULL
 )
@@ -20,7 +20,6 @@ RETURNS TABLE (
     section_number TEXT,
     section_title TEXT,
     content TEXT,
-    ai_interpretation TEXT,
     similarity FLOAT
 ) AS $$
 BEGIN
@@ -28,14 +27,13 @@ BEGIN
     SELECT 
         ns.id::TEXT as section_id,
         n.id::TEXT as norm_id,
-        n.code as norm_code,
-        n.title as norm_title,
-        c.name as norm_country,
-        ns.section_type,
-        ns.section_number,
-        ns.section_title,
-        ns.content,
-        ns.ai_interpretation,
+        n.code::TEXT as norm_code,
+        n.title::TEXT as norm_title,
+        c.name::TEXT as norm_country,
+        ns.section_type::TEXT,
+        ns.section_number::TEXT,
+        ns.section_title::TEXT,
+        ns.content::TEXT,
         (1 - (ns.embedding <=> query_embedding))::FLOAT as similarity
     FROM norm_sections ns
     JOIN norms n ON n.id = ns.norm_id

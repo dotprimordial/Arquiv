@@ -1295,8 +1295,11 @@ export async function searchNormsSemantic(
     return [];
   }
 
+  console.log('[searchNormsSemantic] API Key configured, proceeding to vector search...');
+
   // === VECTOR SEARCH (primary method) ===
   try {
+    console.log('[searchNormsSemantic] Starting vector search...');
     const supabase = await getAuthenticatedSupabaseClient();
     const cleaned = cleanHtmlFormatting(query);
 
@@ -1307,12 +1310,14 @@ export async function searchNormsSemantic(
         queryTextForEmbedding = `Pesquisa: ${cleaned}\nConceitos: ${queryInterpretation.concepts.join(', ')}\nAnálise: ${queryInterpretation.aiAnalysis}`;
       }
       const queryEmbedding = await embeddingClient.generateEmbedding(queryTextForEmbedding);
+      console.log('[searchNormsSemantic] Embedding generated, calling RPC...');
 
     // Use PostgreSQL RPC function with HNSW index for efficient similarity search
+    console.log('[searchNormsSemantic] Calling search_norm_sections RPC with threshold 0.40');
     const { data: rpcResults, error: rpcError } = await supabase.rpc('search_norm_sections', {
       query_embedding: queryEmbedding,
-      match_threshold: 0.55,
-      match_count: limit,
+      match_threshold: 0.40,
+      match_count: 20,
       p_country: country || null
     });
 
