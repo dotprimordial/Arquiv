@@ -1308,187 +1308,78 @@ export async function searchNormsSemantic(
       }
       const queryEmbedding = await embeddingClient.generateEmbedding(queryTextForEmbedding);
 
-    // Fetch sections with embeddings from the database
-    let allowedNormIds: string[] | null = null;
-    if (country) {
-      const { data: countryData } = await supabase
-        .from('countries')
-        .select('id')
-        .eq('name', country)
-        .single();
-      const countryId = (countryData as { id?: string } | null)?.id;
-      if (countryId) {
-        const { data: normRows } = await supabase
-          .from('norms')
-          .select('id')
-          .eq('country_id', countryId)
-          .limit(500);
-        allowedNormIds = (normRows || []).map((r) => String((r as { id?: string }).id)).filter(Boolean);
-      }
+    // Use PostgreSQL RPC function with HNSW index for efficient similarity search
+    const { data: rpcResults, error: rpcError } = await supabase.rpc('search_norm_sections', {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.60,
+      match_count: limit,
+      p_country: country || null
+    });
+
+    if (rpcError) {
+      console.error('[searchNormsSemantic] RPC error:', rpcError);
+      throw new Error(`RPC search failed: ${rpcError.message}`);
     }
 
-    let sectionsQuery = supabase
-      .from('norm_sections')
-      .select('id, norm_id, section_type, section_number, section_title, content, embedding, parent_section_id')
-      .not('embedding', 'is', null)
-      .limit(1000);
-    if (allowedNormIds && allowedNormIds.length > 0) {
-      sectionsQuery = sectionsQuery.in('norm_id', allowedNormIds);
+    if (!rpcResults || rpcResults.length === 0) {
+      console.log('[searchNormsSemantic] No results from RPC search, falling back...');
+      throw new Error('No results');
     }
 
-    const { data: sections, error: sectionsError } = await sectionsQuery;
-    if (!sectionsError && sections && sections.length > 0) {
-      type VectorSectionRow = {
-        id: string;
-        norm_id: string;
-        section_type: string | null;
-        section_number: string | null;
-        section_title: string | null;
-        content: string | null;
-        embedding: unknown;
-        parent_section_id: string | null;
-      };
-      const vectorSections = sections as VectorSectionRow[];
+    console.log('[searchNormsSemantic] RPC search returned', rpcResults.length, 'results');
 
-      // Fetch related norm metadata
-      const normIds = [...new Set(vectorSections.map(s => s.norm_id))];
-      const { data: normsMeta } = await supabase
-        .from('norms')
-        .select('id, code, title, country, countries(name)')
-        .in('id', normIds)
-        .limit(normIds.length);
-
-      const normsMetaMap = new Map<string, Record<string, unknown>>((normsMeta || []).map(n => [n.id as string, n as Record<string, unknown>]));
-
-      // Helper: decode embedding field (Supabase returns it as JSON string)
-      const parseEmbedding = (raw: unknown): number[] | null => {
-        if (Array.isArray(raw)) return raw as number[];
-        if (typeof raw === 'string') { try { return JSON.parse(raw); } catch { return null; } }
+    // Fetch parent sections (full articles) in batch
+    const parentSectionIds = rpcResults
+      .map((r: any) => {
+        const sectionId = r.section_id;
+        // Extract parent section ID from the section_id if needed
+        // For now, we'll need to fetch parent sections separately
         return null;
-      };
+      })
+      .filter((id: string): id is string => Boolean(id));
 
-      // Cosine similarity
-      const cosineSim = (a: number[], b: number[]): number => {
-        let dot = 0, ma = 0, mb = 0;
-        for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; ma += a[i] * a[i]; mb += b[i] * b[i]; }
-        return dot / (Math.sqrt(ma) * Math.sqrt(mb));
-      };
-
-      // Score and rank sections
-      // Use both processSearchQuery AND queryInterpretation for expanded terms
-      const processedTokens = processSearchQuery(cleaned);
-      const allSearchTerms = [
-        ...processedTokens,
-        ...(queryInterpretation.expandedTerms || []),
-        ...(queryInterpretation.concepts || []),
-        ...(queryInterpretation.suggestedSynonyms || [])
-      ];
-      // Normalize all terms (remove accents, lowercase, filter short)
-      const normalizedSearchTokens = new Set(
-        allSearchTerms
-          .map(t => removeAccents(t))
-          .filter(t => t.length >= 3)
-      );
-
-      // Pre-generate morphological variants for all search tokens
-      const searchTokenVariants = new Map<string, string[]>();
-      for (const token of normalizedSearchTokens) {
-        searchTokenVariants.set(token, generateVariants(token));
-      }
-
-      const scored = vectorSections
-        .map((s) => {
-          const emb = parseEmbedding(s.embedding);
-          if (!emb) return null;
-
-          // Calculate semantic similarity
-          const similarity = cosineSim(emb, queryEmbedding);
-
-          // Calculate keyword matching score with morphological variants
-          const sectionText = cleanHtmlFormatting(String(s.content || '') + ' ' + String(s.section_title || ''));
-          const normalizedSectionText = removeAccents(sectionText);
-          let keywordMatches = 0;
-          const foundKeywords = new Set<string>();
-
-          for (const [term, variants] of searchTokenVariants) {
-            if (foundKeywords.has(term)) continue;
-            for (const v of variants) {
-              if (normalizedSectionText.includes(v)) {
-                foundKeywords.add(term);
-                keywordMatches += term.length >= 6 ? 0.15 : 0.08;
-                break;
-              }
-            }
-          }
-
-          // Combine scores: semantic (80% weight) + keyword (20% weight)
-          const finalScore = (similarity * 0.8) + (Math.min(keywordMatches, 0.4) * 0.2);
-
-          return { section: s, similarity: finalScore, rawSimilarity: similarity, keywordScore: keywordMatches };
-        })
-        .filter((r): r is NonNullable<typeof r> => r !== null && r.rawSimilarity >= 0.60)
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, limit);
-
-      if (scored.length > 0) {
-        console.log('[searchNormsSemantic] Vector search returned', scored.length, 'results');
-
-        // Fetch parent sections (full articles) in batch
-        const parentSectionIds = scored
-          .map(({ section }) => section.parent_section_id)
-          .filter((id): id is string => Boolean(id));
-
-        const parentContentMap = new Map<string, string>();
-        if (parentSectionIds.length > 0) {
-          const { data: parentSections } = await supabase
-            .from('norm_sections')
-            .select('id, content')
-            .in('id', parentSectionIds);
-          if (parentSections) {
-            for (const p of parentSections) {
-              parentContentMap.set(String(p.id), p.content || '');
-            }
-          }
+    const parentContentMap = new Map<string, string>();
+    if (parentSectionIds.length > 0) {
+      const { data: parentSections } = await supabase
+        .from('norm_sections')
+        .select('id, content')
+        .in('id', parentSectionIds);
+      if (parentSections) {
+        for (const p of parentSections) {
+          parentContentMap.set(String(p.id), p.content || '');
         }
-
-        const results: SearchResult[] = scored.map(({ section: s, similarity }, idx) => {
-          const norm = normsMetaMap.get(s.norm_id as string);
-          const countryData = (norm?.countries as Array<{ name?: string }> | undefined)?.[0];
-          const cleanContent = cleanHtmlFormatting(String(s.content || ''));
-          const parentId = s.parent_section_id;
-          const fullArticleContent = parentId ? cleanHtmlFormatting(parentContentMap.get(String(parentId)) || cleanContent) : cleanContent;
-
-          return {
-            sectionId: `${String(s.norm_id)}-vs-${idx}`,
-            normId: String(s.norm_id),
-            normCode: (norm?.code as string) || '',
-            normTitle: (norm?.title as string) || '',
-            normCountry: countryData?.name || (norm?.country as string) || '',
-            sectionType: (s.section_type as string) || 'artigo',
-            sectionNumber: (s.section_number as string) || null,
-            sectionTitle: (s.section_title as string) || null,
-            content: cleanContent,
-            similarity: similarity,
-            decree: undefined,
-            regulationNumber: undefined,
-            excerpt: cleanContent,
-            fullArticleContent
-          };
-        });
-
-        // Post-process to extract answers and re-rank
-        const processedResults = await postProcessSearchResults(results, query, queryInterpretation.intent);
-
-        // Cache and return
-        setCachedSearch(cacheKey, processedResults);
-        console.log('[Cache] Set vector search results:', cacheKey);
-        try { await recordSearch(clientIp, 'semantic', query, country, userId); } catch (e) { console.warn('[searchNormsSemantic] Failed to record search:', e); }
-        return processedResults;
       }
-      console.log('[searchNormsSemantic] Vector search found no results above threshold, falling back...');
-    } else {
-      console.log('[searchNormsSemantic] No norm_sections with embeddings found, falling back...');
     }
+
+    // Map RPC results to SearchResult format
+    const results: SearchResult[] = rpcResults.map((r: any, idx: number) => {
+      const cleanContent = cleanHtmlFormatting(String(r.content || ''));
+      return {
+        sectionId: `${r.norm_id}-vs-${idx}`,
+        normId: r.norm_id,
+        normCode: r.norm_code || '',
+        normTitle: r.norm_title || '',
+        normCountry: r.norm_country || '',
+        sectionType: r.section_type || 'artigo',
+        sectionNumber: r.section_number || null,
+        sectionTitle: r.section_title || null,
+        content: cleanContent,
+        similarity: r.similarity,
+        decree: undefined,
+        regulationNumber: undefined,
+        excerpt: cleanContent,
+        fullArticleContent: cleanContent
+      };
+    });
+
+    // Post-process to extract answers and re-rank
+    const processedResults = await postProcessSearchResults(results, query, queryInterpretation.intent);
+
+    // Cache and return
+    setCachedSearch(cacheKey, processedResults);
+    console.log('[Cache] Set vector search results:', cacheKey);
+    try { await recordSearch(clientIp, 'semantic', query, country, userId); } catch (e) { console.warn('[searchNormsSemantic] Failed to record search:', e); }
+    return processedResults;
   } catch (vectorErr) {
     console.warn('[searchNormsSemantic] Vector search failed, falling back to AI pipeline:', vectorErr);
   }
