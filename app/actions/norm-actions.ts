@@ -1311,7 +1311,7 @@ export async function searchNormsSemantic(
     // Use PostgreSQL RPC function with HNSW index for efficient similarity search
     const { data: rpcResults, error: rpcError } = await supabase.rpc('search_norm_sections', {
       query_embedding: queryEmbedding,
-      match_threshold: 0.60,
+      match_threshold: 0.55,
       match_count: limit,
       p_country: country || null
     });
