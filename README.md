@@ -160,5 +160,5 @@ Para suporte, envie um email para seantomasytbr@gmail.com ou abra uma issue no G
 ---
 
 <div align="center">
-  <p>Feito com ❤️ por Sean Tomás</p>
+  <p>Feito por SaaSarc</p>
 </div>
