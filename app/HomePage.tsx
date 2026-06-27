@@ -388,7 +388,7 @@ export default function HomePage() {
                 />
               </button>
               <span className={`text-sm font-medium ${isAiSearchEnabled ? 'text-emerald-600' : 'text-zinc-400'}`}>
-                Busca Inteligente (IA)
+                Pesquisa Inteligente
               </span>
             </div>
           </div>
