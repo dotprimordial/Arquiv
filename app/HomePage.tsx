@@ -238,93 +238,12 @@ export default function HomePage() {
     }
   };
 
-  const SkeletonLoader = () => (
-    <div className="space-y-8 animate-pulse">
-      <div className="py-16 text-center space-y-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-5xl font-bold font-serif tracking-tight text-zinc-900"
-        >
-          <div className="h-12 bg-zinc-200 rounded mx-auto w-96"></div>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          className="text-zinc-500 max-w-2xl mx-auto px-6"
-        >
-          <div className="h-4 bg-zinc-200 rounded mx-auto w-full max-w-2xl"></div>
-        </motion.div>
-      </div>
-      
-      <div className="mb-12">
-        <div className="flex flex-wrap justify-center gap-3">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-12 w-32 bg-zinc-200 rounded-full border border-zinc-100"></div>
-          ))}
-        </div>
-      </div>
-      
-      <div className="mb-4 max-w-5xl mx-auto px-6">
-        <div className="h-14 bg-zinc-200 rounded-full border border-zinc-100 shadow-sm"></div>
-      </div>
-      
-      <div className="max-w-5xl mx-auto mb-8 px-6">
-        <div className="flex items-center justify-center gap-3 bg-white rounded-full px-4 py-2 border border-zinc-200 shadow-sm w-80 mx-auto">
-          <div className="h-4 w-24 bg-zinc-200 rounded"></div>
-          <div className="w-12 h-6 bg-zinc-200 rounded-full"></div>
-          <div className="h-4 w-28 bg-zinc-200 rounded"></div>
-        </div>
-      </div>
-      
-      <div className="max-w-5xl mx-auto px-6 mb-12">
-        <div className="flex flex-wrap justify-center gap-2 px-4">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div key={i} className="h-10 w-24 bg-zinc-200 rounded-full border border-zinc-100"></div>
-          ))}
-        </div>
-      </div>
-      
-      <div className="max-w-5xl mx-auto px-6 space-y-6 pb-20">
-        {[1, 2].map((i) => (
-          <div key={i} className="bg-white border border-zinc-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="p-6 bg-gradient-to-r from-zinc-50 to-white">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-2 flex-1">
-                  <div className="flex items-center gap-3">
-                    <div className="h-4 w-24 bg-zinc-200 rounded" />
-                    <div className="h-5 w-32 bg-zinc-200 rounded-full" />
-                  </div>
-                  <div className="h-7 w-3/4 bg-zinc-200 rounded" />
-                </div>
-              </div>
-            </div>
-            <div className="border-t border-zinc-100">
-              <div className="p-6 space-y-4">
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                  <div className="space-y-2 mb-3">
-                    <div className="h-3 w-1/2 bg-zinc-200 rounded" />
-                    <div className="h-3 w-2/3 bg-zinc-200 rounded" />
-                  </div>
-                  <div className="bg-white border-l-4 border-blue-500 p-4 rounded-r-lg">
-                    <div className="h-4 w-full bg-zinc-200 rounded mb-2" />
-                    <div className="h-4 w-5/6 bg-zinc-200 rounded" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
   return (
     <main className="min-h-screen bg-[#F9F9F8] text-zinc-900 selection:bg-zinc-900 selection:text-white">
-
       {isSessionLoading && isCountriesLoading ? (
-        <SkeletonLoader />
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="w-8 h-8 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin" />
+        </div>
       ) : (
         <>
           <div className="py-16 text-center space-y-6">
@@ -346,19 +265,11 @@ export default function HomePage() {
           </div>
 
           <div className="mb-12">
-            {isCountriesLoading ? (
-              <div className="flex flex-wrap justify-center gap-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-12 w-32 bg-zinc-200 rounded-full animate-pulse"></div>
-                ))}
-              </div>
-            ) : (
-              <CountrySelector
-                selectedCountryName={selectedCountry?.name || ''}
-                onSelect={setSelectedCountry}
-                activeCountryNames={activeCountryNames}
-              />
-            )}
+            <CountrySelector
+              selectedCountryName={selectedCountry?.name || ''}
+              onSelect={setSelectedCountry}
+              activeCountryNames={activeCountryNames}
+            />
           </div>
 
           <div className="mb-4">

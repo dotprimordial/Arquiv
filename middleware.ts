@@ -12,7 +12,7 @@ function addSecurityHeaders(response: NextResponse) {
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://*.supabase.co",
+    "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com",
     "font-src 'self' data:",
     "connect-src 'self' https://*.supabase.co https://openrouter.ai https://generativelanguage.googleapis.com",
     "frame-src 'none'",

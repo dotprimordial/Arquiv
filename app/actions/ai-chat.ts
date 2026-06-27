@@ -198,7 +198,7 @@ ${contextBlock}`;
     const openRouter = new OpenRouterClient(apiKey);
     const response = await openRouter.chatCompletion(
       messages,
-      "google/gemma-4-31b-it:free",
+      "google/gemini-2.5-flash-lite",
       0.2,
       undefined,
       2048
